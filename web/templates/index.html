@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atmospheric Science RAG System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Animated Weather Background -->
+    <div class="sky-background">
+        <!-- Sun -->
+        <div class="sun">
+            <div class="sun-rays"></div>
+        </div>
+        
+        <!-- Animated Clouds -->
+        <div class="cloud cloud-1"></div>
+        <div class="cloud cloud-2"></div>
+        <div class="cloud cloud-3"></div>
+        <div class="cloud cloud-4"></div>
+        <div class="cloud cloud-5"></div>
+        <div class="cloud cloud-6"></div>
+        
+        <!-- Weather Symbols -->
+        <div class="weather-symbol lightning">⚡</div>
+        <div class="weather-symbol rain">🌧️</div>
+        <div class="weather-symbol snow">❄️</div>
+        <div class="weather-symbol wind">💨</div>
+        <div class="weather-symbol rainbow">🌈</div>
+        <div class="weather-symbol thermometer">🌡️</div>
+        <div class="weather-symbol tornado">🌪️</div>
+        <div class="weather-symbol humidity">💧</div>
+        
+        <!-- Floating Particles -->
+        <div class="particles">
+            <span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">🌤️</span>
+                <div class="logo-text">
+                    <h1>Atmospheric Science RAG</h1>
+                    <p class="subtitle">Knowledge Competition System</p>
+                </div>
+            </div>
+            <p class="tagline">Explore the skies with AI-powered document retrieval</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Left Panel: Upload & Documents -->
+            <div class="left-panel">
+                <div class="card upload-card">
+                    <div class="card-header">
+                        <span class="card-icon">📤</span>
+                        <h2>Upload Documents</h2>
+                    </div>
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" multiple accept=".pdf" hidden>
+                        <div class="upload-placeholder">
+                            <div class="upload-cloud">☁️</div>
+                            <p>Drop PDF files here or click to browse</p>
+                            <small>Atmospheric research papers, climate reports, weather data</small>
+                        </div>
+                    </div>
+                    <div class="file-list" id="fileList"></div>
+                    <button class="btn btn-primary" id="uploadBtn" disabled>
+                        <span class="btn-icon">🚀</span> Upload Files
+                    </button>
+                </div>
+
+                <div class="card process-card">
+                    <div class="card-header">
+                        <span class="card-icon">⚙️</span>
+                        <h2>Process Documents</h2>
+                    </div>
+                    <p class="card-desc">Parse PDFs, extract text, and build vector database</p>
+                    <div class="process-steps">
+                        <div class="step"><span class="step-num">1</span> Parse PDFs</div>
+                        <div class="step"><span class="step-num">2</span> Build Index</div>
+                        <div class="step"><span class="step-num">3</span> Ready to Query</div>
+                    </div>
+                    <button class="btn btn-secondary" id="processBtn" disabled>
+                        <span class="spinner hidden" id="processSpinner"></span>
+                        <span class="btn-icon">🔬</span> Process Documents
+                    </button>
+                    <div class="progress-bar hidden" id="progressBar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+
+                <div class="card documents-card">
+                    <div class="card-header">
+                        <span class="card-icon">📚</span>
+                        <h2>Document Library</h2>
+                    </div>
+                    <div class="document-list" id="documentList">
+                        <div class="empty-state">
+                            <span class="empty-icon">📭</span>
+                            <p>No documents processed yet</p>
+                            <small>Upload atmospheric science papers to begin</small>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-text" id="refreshDocs">
+                            <span class="btn-icon">🔄</span> Refresh
+                        </button>
+                        <button class="btn btn-danger btn-small" id="clearBtn">
+                            <span class="btn-icon">🗑️</span> Clear All
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card stats-card">
+                    <div class="card-header">
+                        <span class="card-icon">📊</span>
+                        <h2>System Status</h2>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat">
+                            <span class="stat-icon">📄</span>
+                            <span class="stat-value" id="statPdfs">0</span>
+                            <span class="stat-label">PDF Files</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-icon">🔍</span>
+                            <span class="stat-value" id="statParsed">0</span>
+                            <span class="stat-label">Parsed</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-icon">🗃️</span>
+                            <span class="stat-value" id="statVectors">0</span>
+                            <span class="stat-label">Vector DBs</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Query Interface -->
+            <div class="right-panel">
+                <div class="card query-card">
+                    <div class="card-header">
+                        <span class="card-icon">🔭</span>
+                        <h2>Ask a Question</h2>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="documentSelect">
+                            <span class="label-icon">📁</span> Select Document (Optional)
+                        </label>
+                        <select id="documentSelect">
+                            <option value="">📂 All Documents</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="questionInput">
+                            <span class="label-icon">❓</span> Your Question
+                        </label>
+                        <textarea 
+                            id="questionInput" 
+                            rows="4" 
+                            placeholder="e.g., What causes the formation of cumulonimbus clouds? How does El Niño affect global weather patterns?"
+                        ></textarea>
+                        <small class="input-hint">Ask about atmospheric phenomena, climate patterns, weather systems...</small>
+                    </div>
+
+                    <button class="btn btn-primary btn-large" id="queryBtn">
+                        <span class="spinner hidden" id="querySpinner"></span>
+                        <span class="btn-icon">🎯</span> Get Answer
+                    </button>
+                </div>
+
+                <div class="card answer-card hidden" id="answerCard">
+                    <div class="answer-header">
+                        <span class="answer-icon">✅</span>
+                        <h2>Answer</h2>
+                        <span class="answer-badge" id="answerSchema">text</span>
+                    </div>
+                    
+                    <div class="answer-content">
+                        <div class="answer-main" id="answerMain">
+                            <p class="answer-text" id="answerText"></p>
+                        </div>
+                    </div>
+
+                    <div class="answer-section">
+                        <div class="section-header">
+                            <span class="section-icon">🧠</span>
+                            <h3>Reasoning</h3>
+                        </div>
+                        <p class="reasoning-text" id="reasoningText"></p>
+                    </div>
+
+                    <div class="answer-section">
+                        <div class="section-header">
+                            <span class="section-icon">📖</span>
+                            <h3>Detailed Analysis</h3>
+                        </div>
+                        <div class="analysis-text" id="analysisText"></div>
+                    </div>
+
+                    <div class="answer-section">
+                        <div class="section-header">
+                            <span class="section-icon">📚</span>
+                            <h3>Source Context</h3>
+                        </div>
+                        <div class="context-list" id="contextList"></div>
+                    </div>
+
+                    <div class="answer-section">
+                        <div class="section-header">
+                            <span class="section-icon">📍</span>
+                            <h3>Reference Pages</h3>
+                        </div>
+                        <div class="page-tags" id="pageTags"></div>
+                    </div>
+                </div>
+
+                <div class="card examples-card">
+                    <div class="card-header">
+                        <span class="card-icon">💡</span>
+                        <h2>Example Questions</h2>
+                    </div>
+                    <div class="example-list">
+                        <button class="example-btn" data-question="What causes the formation of cumulonimbus clouds?">
+                            <span class="example-icon">⛈️</span>
+                            <span class="example-text">What causes the formation of cumulonimbus clouds?</span>
+                        </button>
+                        <button class="example-btn" data-question="How does El Niño affect global weather patterns?">
+                            <span class="example-icon">🌊</span>
+                            <span class="example-text">How does El Niño affect global weather patterns?</span>
+                        </button>
+                        <button class="example-btn" data-question="What is the difference between weather and climate?">
+                            <span class="example-icon">🌤️</span>
+                            <span class="example-text">What is the difference between weather and climate?</span>
+                        </button>
+                        <button class="example-btn" data-question="How do hurricanes form and intensify?">
+                            <span class="example-icon">🌀</span>
+                            <span class="example-text">How do hurricanes form and intensify?</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <div class="footer-content">
+                <span class="footer-icon">🌍</span>
+                <p>Atmospheric Science Knowledge Competition</p>
+                <span class="footer-divider">|</span>
+                <p>Powered by RAG Technology</p>
+                <span class="footer-icon">🚀</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
