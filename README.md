@@ -1,4 +1,4 @@
-# Meteorology Knowledge Contest
+# RAG system for Meteorology Knowledge Contest
 
 A complete RAG (Retrieval-Augmented Generation) system with hierarchical retrieval (RAPTOR), multiple backends (FAISS/Chroma), and comprehensive evaluation framework. Built for meteorology knowledge contests with a beautiful weather-themed UI featuring animated sky, clouds, and sun.
 
