@@ -1,20 +1,19 @@
-# Adaptive RAG System
+# Meteorology Knowledge Contest
 
-A complete RAG (Retrieval-Augmented Generation) system with hierarchical retrieval (RAPTOR), multiple backends (FAISS/Chroma), and comprehensive evaluation framework. Built for atmospheric science knowledge competitions with a beautiful weather-themed UI featuring animated sky, clouds, and sun.
+A complete RAG (Retrieval-Augmented Generation) system with hierarchical retrieval (RAPTOR), multiple backends (FAISS/Chroma), and comprehensive evaluation framework. Built for meteorology knowledge contests with a beautiful weather-themed UI featuring animated sky, clouds, and sun.
 
-![UI Screenshot](demo_screenshot.png)
-
-> 🎥 **[Watch Demo Video](demo_video.webm)** - See the weather-themed UI in action with document upload, processing, and Q&A capabilities.
+<p align="center">
+  <img src="demo.gif" width="66%" alt="Meteorology Knowledge Contest UI Demo">
+</p>
 
 ## Demo
 
 The system features a beautiful atmospheric science-themed interface:
-- 🌤️ Animated gradient sky background
-- ☁️ Floating clouds with drift animation
-- ☀️ Pulsing sun with rotating rays
-- ⚡🌧️❄️ Weather symbols floating across the screen
-- 📤 Drag-and-drop PDF upload
-- 🔍 Natural language query interface
+- Animated gradient sky background
+- Floating clouds with drift animation
+- Pulsing sun with rotating rays
+- Drag-and-drop PDF upload
+- Natural language query interface
 
 ## Features
 
