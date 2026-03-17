@@ -1,15 +1,30 @@
-# RAG System with WebUI
+# Adaptive RAG System
 
-A complete RAG (Retrieval-Augmented Generation) system for document Q&A, based on the winning solution from the RAG Challenge 2. Features a modern web interface for easy interaction.
+A complete RAG (Retrieval-Augmented Generation) system with hierarchical retrieval (RAPTOR), multiple backends (FAISS/Chroma), and comprehensive evaluation framework. Built for atmospheric science knowledge competitions with a beautiful weather-themed UI featuring animated sky, clouds, and sun.
+
+![UI Screenshot](demo_screenshot.png)
+
+> 🎥 **[Watch Demo Video](demo_video.webm)** - See the weather-themed UI in action with document upload, processing, and Q&A capabilities.
+
+## Demo
+
+The system features a beautiful atmospheric science-themed interface:
+- 🌤️ Animated gradient sky background
+- ☁️ Floating clouds with drift animation
+- ☀️ Pulsing sun with rotating rays
+- ⚡🌧️❄️ Weather symbols floating across the screen
+- 📤 Drag-and-drop PDF upload
+- 🔍 Natural language query interface
 
 ## Features
 
 - 📄 **PDF Processing**: Extract text, tables, and structure from PDFs using Docling
 - 🔍 **Vector Search**: Semantic search with FAISS and OpenAI embeddings
 - 🧠 **LLM Reranking**: GPT-4o-mini reranks retrieved chunks for better accuracy
-- 🌐 **Web Interface**: Modern React-style UI for uploading documents and asking questions
+- 🌐 **Web Interface**: Modern React-style UI with animated weather theme (sky, clouds, sun)
 - ⚡ **Parallel Processing**: Multi-process PDF parsing for speed
-- 📊 **Multiple Answer Types**: Supports boolean, numeric, name, and text answers
+- 🌳 **RAPTOR Support**: Hierarchical retrieval with tree-based document organization
+- 📊 **Evaluation Framework**: Comprehensive metrics (Recall, Precision, NDCG, MRR)
 
 ## Project Structure
 
@@ -20,7 +35,7 @@ rag_system/
 ├── .env                    # Environment variables (API keys)
 ├── README.md
 ├── data/
-│   ├── pdf_reports/       # Place your 20 PDFs here
+│   ├── pdf_reports/       # Place your PDFs here
 │   ├── debug/             # Intermediate processing data
 │   ├── databases/         # Vector databases
 │   └── uploads/           # Web UI uploads
@@ -61,7 +76,7 @@ OPENAI_API_KEY=your_key_here
 ```
 
 3. **Add Your PDFs**
-Copy your 20 PDF files to `data/pdf_reports/`
+Copy your PDF files to `data/pdf_reports/`
 
 ## Usage
 
