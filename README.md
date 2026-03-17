@@ -2,9 +2,6 @@
 
 A complete RAG (Retrieval-Augmented Generation) system with hierarchical retrieval (RAPTOR), multiple backends (FAISS/Chroma), and comprehensive evaluation framework. Built for meteorology knowledge contests with a beautiful weather-themed UI featuring animated sky, clouds, and sun.
 
-<p align="center">
-  <img src="demo.gif" width="66%" alt="Meteorology Knowledge Contest UI Demo">
-</p>
 
 ## Demo
 
@@ -23,7 +20,6 @@ The system features a beautiful atmospheric science-themed interface:
 - 🌐 **Web Interface**: Modern React-style UI with animated weather theme (sky, clouds, sun)
 - ⚡ **Parallel Processing**: Multi-process PDF parsing for speed
 - 🌳 **RAPTOR Support**: Hierarchical retrieval with tree-based document organization
-- 📊 **Evaluation Framework**: Comprehensive metrics (Recall, Precision, NDCG, MRR)
 
 ## Project Structure
 
@@ -110,7 +106,7 @@ python -c "from src.pipeline import Pipeline; p = Pipeline('.'); p.parse_pdf_rep
 from src.pipeline import Pipeline
 
 pipeline = Pipeline('.')
-answer = pipeline.query_single("What was the total revenue in 2023?", document_name="annual_report")
+answer = pipeline.query_single("What causes the formation of cumulonimbus clouds?", document_name=".pdf")
 
 print(answer['final_answer'])
 print(answer['reasoning_summary'])
