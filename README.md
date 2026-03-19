@@ -12,6 +12,10 @@ The system features a beautiful atmospheric science-themed interface:
 - Drag-and-drop PDF upload
 - Natural language query interface
 
+<p align="center">
+  <img src="demo.png" width="66%" alt="Meteorology Knowledge Contest UI Demo">
+</p>
+
 ## Features
 
 - 📄 **PDF Processing**: Extract text, tables, and structure from PDFs using Docling
