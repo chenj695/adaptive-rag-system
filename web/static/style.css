@@ -75,8 +75,11 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 140px;
-    height: 140px;
+
+    /* 从 140px 扩大，让射线向外延伸更多 */
+    width: 200px;
+    height: 200px;
+
     background: conic-gradient(
         from 0deg,
         transparent 0deg,
@@ -111,6 +114,10 @@ body {
     border-radius: 50%;
     animation: sun-rays-rotate 20s linear infinite;
     opacity: 0.6;
+
+    /* 太阳半径50px / sun-rays新半径110px ≈ 45.5%，硬边完全切除重叠 */
+    -webkit-mask-image: radial-gradient(circle, transparent 42%, black 42%);
+    mask-image: radial-gradient(circle, transparent 42%, black 42%);
 }
 
 @keyframes sun-pulse {
