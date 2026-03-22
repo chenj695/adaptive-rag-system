@@ -75,8 +75,11 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 140px;
-    height: 140px;
+
+    /* 从 140px 扩大，让射线向外延伸更多 */
+    width: 200px;
+    height: 200px;
+
     background: conic-gradient(
         from 0deg,
         transparent 0deg,
@@ -111,6 +114,10 @@ body {
     border-radius: 50%;
     animation: sun-rays-rotate 20s linear infinite;
     opacity: 0.6;
+
+    /* 太阳半径50px / sun-rays新半径110px ≈ 45.5%，硬边完全切除重叠 */
+    -webkit-mask-image: radial-gradient(circle, transparent 42%, black 42%);
+    mask-image: radial-gradient(circle, transparent 42%, black 42%);
 }
 
 @keyframes sun-pulse {
@@ -459,7 +466,7 @@ header {
 .upload-area {
     border: 3px dashed var(--accent);
     border-radius: 16px;
-    padding: 35px 20px;
+    padding: 10px 20px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s;
@@ -479,8 +486,9 @@ header {
 }
 
 .upload-cloud {
-    font-size: 4rem;
-    margin-bottom: 12px;
+    font-size: 2.5rem;
+    margin-top: 14px;
+    margin-bottom: 6px;
     animation: cloud-float 3s ease-in-out infinite;
 }
 
@@ -493,7 +501,7 @@ header {
 .upload-placeholder p {
     color: var(--text-dark);
     font-weight: 500;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
     margin-bottom: 8px;
 }
 
