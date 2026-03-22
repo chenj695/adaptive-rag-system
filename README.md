@@ -1,6 +1,7 @@
-# Meteorology Knowledge Contest
+# RAG for Meteorology Knowledge Contest
 
 A complete RAG (Retrieval-Augmented Generation) system with hierarchical retrieval (RAPTOR), multiple backends (FAISS/Chroma), and comprehensive evaluation framework. Built for meteorology knowledge contests with a beautiful weather-themed UI featuring animated sky, clouds, and sun.
+
 
 ## Demo
 
@@ -11,10 +12,14 @@ The system features a clean atmospheric science-themed interface:
 - Drag-and-drop PDF upload
 - Natural language query interface
 
+<p align="center">
+  <img src="demo.png" width="66%" alt="Meteorology Knowledge Contest UI Demo">
+</p>
+
 ## Features
 
 - 📄 **PDF Processing**: Extract text, tables, and structure from PDFs using Docling
-- 🔍 **Vector Search**: Semantic search with FAISS and OpenAI embeddings
+- 🔍 **Multi-Path Retrieval**: Semantic search (FAISS) + Lexical search(BM25) and RRF Fusion (Reciprocal Rank Fusion)
 - 🧠 **LLM Reranking**: GPT-4o-mini reranks retrieved chunks for better accuracy
 - 🌐 **Web Interface**: Modern React-style UI with animated weather theme (sky, clouds, sun)
 - ⚡ **Parallel Processing**: Multi-process PDF parsing for speed
