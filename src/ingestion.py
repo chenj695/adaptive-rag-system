@@ -7,6 +7,8 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 from openai import OpenAI
 from rank_bm25 import BM25Okapi
+
+__all__ = ['VectorDBIngestor', 'BM25Ingestor']
 import faiss
 import numpy as np
 from tenacity import retry, wait_fixed, stop_after_attempt

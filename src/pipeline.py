@@ -21,6 +21,12 @@ class RunConfig:
     api_provider: str = "openai"
     answering_model: str = "o3-mini-2025-01-31"
     config_suffix: str = ""
+    # Multi-path retrieval settings
+    use_multi_path: bool = False  # Enable multi-path retrieval (semantic + BM25 + RRF)
+    rrf_k: int = 60  # Reciprocal Rank Fusion constant
+    semantic_top_n: int = 20  # Number of results from semantic path
+    lexical_top_n: int = 20  # Number of results from lexical (BM25) path
+    fusion_top_k: int = 20  # Number of results after RRF fusion
 
 
 # Configuration presets
@@ -83,6 +89,40 @@ gemini_thinking_config = RunConfig(
     config_suffix="_gemini_thinking_fc"
 )
 
+# Multi-path retrieval config
+multi_path_config = RunConfig(
+    use_serialized_tables=False,
+    parent_document_retrieval=False,
+    llm_reranking=False,
+    use_multi_path=True,
+    rrf_k=60,
+    semantic_top_n=20,
+    lexical_top_n=20,
+    fusion_top_k=20,
+    top_n_retrieval=6,
+    submission_name="RAG System Multi-Path",
+    pipeline_details="Custom pdf parsing + Multi-Path Retrieval (Semantic + BM25 + RRF); llm = o3-mini",
+    config_suffix="_multi_path"
+)
+
+# Multi-path with reranking
+multi_path_rerank_config = RunConfig(
+    use_serialized_tables=False,
+    parent_document_retrieval=False,
+    llm_reranking=True,
+    use_multi_path=True,
+    rrf_k=60,
+    semantic_top_n=20,
+    lexical_top_n=20,
+    fusion_top_k=28,
+    llm_reranking_sample_size=28,
+    top_n_retrieval=6,
+    parallel_requests=5,
+    submission_name="RAG System Multi-Path + Rerank",
+    pipeline_details="Custom pdf parsing + Multi-Path Retrieval (Semantic + BM25 + RRF) + LLM Reranking; llm = o3-mini",
+    config_suffix="_multi_path_rerank"
+)
+
 configs = {
     "base": base_config,
     "pdr": parent_document_retrieval_config,
@@ -90,7 +130,9 @@ configs = {
     "max_no_ser_tab": max_no_ser_tab_config,
     "max_nst_o3m": max_nst_o3m_config,
     "max_st_o3m": max_st_o3m_config,
-    "gemini_thinking": gemini_thinking_config
+    "gemini_thinking": gemini_thinking_config,
+    "multi_path": multi_path_config,
+    "multi_path_rerank": multi_path_rerank_config
 }
 
 preprocess_configs = {
@@ -169,6 +211,13 @@ class Pipeline:
         from src.ingestion import VectorDBIngestor
         ingestor = VectorDBIngestor()
         ingestor.process_reports(self.chunked_reports_dir, self.vector_dbs_dir)
+    
+    def create_bm25_indices(self):
+        """Create BM25 keyword search indices from chunked reports."""
+        from src.ingestion import BM25Ingestor
+        bm25_dir = self.databases_dir / "bm25_indices"
+        ingestor = BM25Ingestor()
+        ingestor.process_reports(self.chunked_reports_dir, bm25_dir)
 
     def process_parsed_reports(self):
         """Run full preprocessing pipeline."""

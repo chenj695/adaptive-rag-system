@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from src.retrieval import HybridRetriever
+from src.multi_path_retrieval import MultiPathRetriever, MultiPathRetrieverWithRAPTOR
 from src.prompts import (
     NumberSchemaPrompt, BooleanSchemaPrompt, NameSchemaPrompt,
     AnswerSchemaFixPrompt
@@ -92,14 +93,29 @@ class QuestionsProcessor:
     
     def __init__(self, questions_file: Optional[Path], vector_db_dir: Path, 
                  documents_dir: Path, markdown_reports_dir: Path = None, 
-                 run_config=None):
+                 run_config=None, bm25_dir: Path = None):
         self.questions_file = questions_file
         self.questions = self._load_questions(questions_file) if questions_file else []
         self.openai_processor = OpenAIProcessor(
             api_provider=run_config.api_provider if run_config else "openai",
             model=run_config.answering_model if run_config else "o3-mini-2025-01-31"
         )
-        self.retriever = HybridRetriever(vector_db_dir, documents_dir)
+        
+        # Use multi-path retriever if enabled, otherwise use standard HybridRetriever
+        if run_config and run_config.use_multi_path:
+            from pathlib import Path as PathType
+            bm25_path = bm25_dir or (PathType(vector_db_dir).parent / "bm25_indices")
+            self.retriever = MultiPathRetriever(
+                vector_db_dir=vector_db_dir,
+                bm25_dir=bm25_path,
+                documents_dir=documents_dir,
+                rrf_k=run_config.rrf_k
+            )
+            self.use_multi_path = True
+        else:
+            self.retriever = HybridRetriever(vector_db_dir, documents_dir)
+            self.use_multi_path = False
+        
         self.markdown_reports_dir = markdown_reports_dir
         self.run_config = run_config
         self.answer_details = []
@@ -139,7 +155,20 @@ class QuestionsProcessor:
         # Retrieve context
         if self.run_config and self.run_config.full_context and self.markdown_reports_dir:
             rag_context = self.retriever.vector_retriever.retrieve_all_pages(sha1_name)
+        elif self.use_multi_path:
+            # Use multi-path retrieval
+            rag_context = self.retriever.retrieve_by_document(
+                sha1_name=sha1_name,
+                query=question,
+                semantic_top_n=self.run_config.semantic_top_n if self.run_config else 20,
+                lexical_top_n=self.run_config.lexical_top_n if self.run_config else 20,
+                fusion_top_k=self.run_config.fusion_top_k if self.run_config else 20,
+                use_reranking=self.run_config.llm_reranking if self.run_config else False,
+                llm_reranking_sample_size=self.run_config.llm_reranking_sample_size if self.run_config else 28,
+                top_n=self.run_config.top_n_retrieval if self.run_config else 6
+            )
         else:
+            # Use standard hybrid retrieval
             rag_context = self.retriever.retrieve_by_document(
                 sha1_name=sha1_name,
                 query=question,
@@ -161,6 +190,8 @@ class QuestionsProcessor:
         answer["schema"] = schema
         answer["document_name"] = document_name or sha1_name
         answer["retrieved_context"] = rag_context[:3] if isinstance(rag_context, list) else []
+        if self.use_multi_path:
+            answer["retrieval_method"] = "multi_path"
         
         return answer
 
