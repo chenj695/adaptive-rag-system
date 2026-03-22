@@ -73,11 +73,12 @@ fileInput.addEventListener('change', (e) => {
 });
 
 function addFiles(files) {
-    files.forEach(file => {
-        if (!selectedFiles.find(f => f.name === file.name)) {
-            selectedFiles.push(file);
-        }
-    });
+    if (files.length === 0) return;
+    
+    // 只保留最新上传的一个文件，替换原有列表
+    const latestFile = files[files.length - 1];
+    selectedFiles = [latestFile];
+    
     updateFileList();
 }
 
