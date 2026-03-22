@@ -10,18 +10,19 @@
 <body>
     <!-- Animated Weather Background -->
     <div class="sky-background">
-        <!-- Sun -->
         <div class="sun">
             <div class="sun-rays"></div>
         </div>
-        
-        <!-- Animated Clouds -->
         <div class="cloud cloud-1"></div>
         <div class="cloud cloud-2"></div>
         <div class="cloud cloud-3"></div>
         <div class="cloud cloud-4"></div>
         <div class="cloud cloud-5"></div>
         <div class="cloud cloud-6"></div>
+        <div class="particles">
+            <span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
+        </div>
     </div>
 
     <div class="container">
@@ -29,10 +30,10 @@
             <div class="logo">
                 <div class="logo-text">
                     <h1>Meteorology Knowledge Contest</h1>
-                    <p class="subtitle">AI-Powered Document Retrieval System</p>
+                    <p class="subtitle">🌤️AI-Powered Document Retrieval System🚀</p>
                 </div>
             </div>
-            <p class="tagline">Explore the skies with intelligent atmospheric science Q&A</p>
+  
         </header>
 
         <div class="main-content">
@@ -40,17 +41,31 @@
             <div class="left-panel">
                 <div class="card upload-card">
                     <div class="card-header">
+                        <span class="card-icon">🌤️</span>
                         <h2>Upload Documents</h2>
                     </div>
                     <div class="upload-area" id="uploadArea">
                         <input type="file" id="fileInput" multiple accept=".pdf" hidden>
                         <div class="upload-placeholder">
+                            <div class="upload-cloud">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="16 16 12 12 8 16"/>
+                                    <line x1="12" y1="12" x2="12" y2="21"/>
+                                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                                </svg>
+                            </div>
                             <p>Drop PDF files here or click to browse</p>
                             <small>Atmospheric research papers, climate reports, weather data</small>
                         </div>
                     </div>
                     <div class="file-list" id="fileList"></div>
                     <button class="btn btn-primary" id="uploadBtn" disabled>
+                        <span class="btn-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="19" x2="12" y2="5"/>
+                                <polyline points="5 12 12 5 19 12"/>
+                            </svg>
+                        </span>
                         Upload Files
                     </button>
                 </div>
@@ -60,21 +75,32 @@
             <div class="right-panel">
                 <div class="card query-card">
                     <div class="card-header">
+                        <span class="card-icon">❓</span>
                         <h2>Ask a Question</h2>
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="documentSelect">Select Document (Optional)</label>
+                        <label for="documentSelect">
+                            <span class="label-icon">
+                                📄
+                            </span>
+                            Select Document (Optional)
+                        </label>
                         <select id="documentSelect">
                             <option value="">All Documents</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="questionInput">Your Question</label>
-                        <textarea 
-                            id="questionInput" 
-                            rows="4" 
+                        <label for="questionInput">
+                            <span class="label-icon">
+                                🔍
+                            </span>
+                            Your Question
+                        </label>
+                        <textarea
+                            id="questionInput"
+                            rows="4"
                             placeholder="e.g., What causes the formation of cumulonimbus clouds? How does El Nino affect global weather patterns?"
                         ></textarea>
                         <small class="input-hint">Ask about atmospheric phenomena, climate patterns, weather systems...</small>
@@ -82,16 +108,22 @@
 
                     <button class="btn btn-primary btn-large" id="queryBtn">
                         <span class="spinner hidden" id="querySpinner"></span>
+                        <span class="btn-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                            </svg>
+                        </span>
                         Get Answer
                     </button>
                 </div>
 
                 <div class="card answer-card hidden" id="answerCard">
                     <div class="answer-header">
+                        <span class="answer-icon">🌟</span>
                         <h2>Answer</h2>
                         <span class="answer-badge" id="answerSchema">text</span>
                     </div>
-                    
+
                     <div class="answer-content">
                         <div class="answer-main" id="answerMain">
                             <p class="answer-text" id="answerText"></p>
@@ -100,6 +132,13 @@
 
                     <div class="answer-section">
                         <div class="section-header">
+                            <span class="section-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="18" cy="18" r="3"/>
+                                    <circle cx="6" cy="6" r="3"/>
+                                    <path d="M6 21V9a9 9 0 0 0 9 9"/>
+                                </svg>
+                            </span>
                             <h3>Reasoning</h3>
                         </div>
                         <p class="reasoning-text" id="reasoningText"></p>
@@ -107,6 +146,14 @@
 
                     <div class="answer-section">
                         <div class="section-header">
+                            <span class="section-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="20" x2="18" y2="10"/>
+                                    <line x1="12" y1="20" x2="12" y2="4"/>
+                                    <line x1="6" y1="20" x2="6" y2="14"/>
+                                    <line x1="2" y1="20" x2="22" y2="20"/>
+                                </svg>
+                            </span>
                             <h3>Detailed Analysis</h3>
                         </div>
                         <div class="analysis-text" id="analysisText"></div>
@@ -114,6 +161,11 @@
 
                     <div class="answer-section">
                         <div class="section-header">
+                            <span class="section-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                                </svg>
+                            </span>
                             <h3>Source Context</h3>
                         </div>
                         <div class="context-list" id="contextList"></div>
@@ -121,6 +173,12 @@
 
                     <div class="answer-section">
                         <div class="section-header">
+                            <span class="section-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="7" width="16" height="14" rx="2"/>
+                                    <path d="M6 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2"/>
+                                </svg>
+                            </span>
                             <h3>Reference Pages</h3>
                         </div>
                         <div class="page-tags" id="pageTags"></div>
@@ -129,10 +187,11 @@
             </div>
         </div>
 
-        <!-- Bottom Row: Process, Documents, Stats -->
+        <!-- Bottom Row -->
         <div class="bottom-row">
             <div class="card process-card">
                 <div class="card-header">
+                    <span class="card-icon">🔄</span>
                     <h2>Process Documents</h2>
                 </div>
                 <p class="card-desc">Parse PDFs, extract text, and build vector database</p>
@@ -143,6 +202,11 @@
                 </div>
                 <button class="btn btn-secondary" id="processBtn" disabled>
                     <span class="spinner hidden" id="processSpinner"></span>
+                    <span class="btn-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                    </span>
                     Process Documents
                 </button>
                 <div class="progress-bar hidden" id="progressBar">
@@ -152,19 +216,39 @@
 
             <div class="card documents-card">
                 <div class="card-header">
+                    <span class="card-icon">🗃️</span>
                     <h2>Document Library</h2>
                 </div>
                 <div class="document-list" id="documentList">
                     <div class="empty-state">
+                        <span class="empty-icon">
+                            📁
+                        </span>
                         <p>No documents processed yet</p>
                         <small>Upload atmospheric science papers to begin</small>
                     </div>
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-text" id="refreshDocs">
+                        <span class="btn-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <polyline points="1 20 1 14 7 14"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                        </span>
                         Refresh
                     </button>
                     <button class="btn btn-danger btn-small" id="clearBtn">
+                        <span class="btn-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6"/>
+                                <path d="M14 11v6"/>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                        </span>
                         Clear All
                     </button>
                 </div>
@@ -172,18 +256,40 @@
 
             <div class="card stats-card">
                 <div class="card-header">
+                    <span class="card-icon">📈</span>
                     <h2>System Status</h2>
                 </div>
                 <div class="stats-grid">
                     <div class="stat">
+                        <span class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="9" y1="13" x2="15" y2="13"/>
+                                <line x1="9" y1="17" x2="15" y2="17"/>
+                            </svg>
+                        </span>
                         <span class="stat-value" id="statPdfs">0</span>
                         <span class="stat-label">PDF Files</span>
                     </div>
                     <div class="stat">
+                        <span class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                <polyline points="22 4 12 14.01 9 11.01"/>
+                            </svg>
+                        </span>
                         <span class="stat-value" id="statParsed">0</span>
                         <span class="stat-label">Parsed</span>
                     </div>
                     <div class="stat">
+                        <span class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                            </svg>
+                        </span>
                         <span class="stat-value" id="statVectors">0</span>
                         <span class="stat-label">Vector DBs</span>
                     </div>
@@ -193,9 +299,11 @@
 
         <footer>
             <div class="footer-content">
+                <span class="footer-icon">🌍</span>
                 <p>Meteorology Knowledge Contest</p>
                 <span class="footer-divider">|</span>
                 <p>Powered by RAG Technology</p>
+                <span class="footer-icon">🚀</span>
             </div>
         </footer>
     </div>
