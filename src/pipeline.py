@@ -123,6 +123,38 @@ multi_path_rerank_config = RunConfig(
     config_suffix="_multi_path_rerank"
 )
 
+# GitHub Models config
+github_models_config = RunConfig(
+    use_serialized_tables=False,
+    parent_document_retrieval=True,
+    llm_reranking=False,
+    parallel_requests=5,
+    submission_name="RAG System GitHub Models",
+    pipeline_details="Custom pdf parsing + Parent Document Retrieval + GitHub Models API",
+    api_provider="github",
+    answering_model="openai/gpt-4.1",
+    config_suffix="_github"
+)
+
+# GitHub Models with multi-path
+github_models_multi_path_config = RunConfig(
+    use_serialized_tables=False,
+    parent_document_retrieval=False,
+    llm_reranking=False,
+    use_multi_path=True,
+    rrf_k=60,
+    semantic_top_n=20,
+    lexical_top_n=20,
+    fusion_top_k=20,
+    top_n_retrieval=6,
+    parallel_requests=5,
+    submission_name="RAG System GitHub Models Multi-Path",
+    pipeline_details="Custom pdf parsing + Multi-Path Retrieval + GitHub Models API",
+    api_provider="github",
+    answering_model="openai/gpt-4.1",
+    config_suffix="_github_multi"
+)
+
 configs = {
     "base": base_config,
     "pdr": parent_document_retrieval_config,
@@ -132,7 +164,9 @@ configs = {
     "max_st_o3m": max_st_o3m_config,
     "gemini_thinking": gemini_thinking_config,
     "multi_path": multi_path_config,
-    "multi_path_rerank": multi_path_rerank_config
+    "multi_path_rerank": multi_path_rerank_config,
+    "github": github_models_config,
+    "github_multi": github_models_multi_path_config
 }
 
 preprocess_configs = {

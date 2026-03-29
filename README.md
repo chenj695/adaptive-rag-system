@@ -135,6 +135,41 @@ Edit `src/pipeline.py` to customize:
 - `llm_reranking`: Enable/disable reranking
 - `answering_model`: Change LLM model
 
+### Using GitHub Models (Free Tier Available)
+
+The system now supports **GitHub Models API** as an alternative to OpenAI:
+
+1. **Get a GitHub Token**: Create a Personal Access Token at https://github.com/settings/tokens with `models:read` scope
+
+2. **Configure Environment**:
+```bash
+# Edit .env file
+GITHUB_TOKEN=ghp_your_token_here
+# Optional: choose model (default: openai/gpt-4.1)
+GITHUB_MODEL=openai/gpt-4.1
+```
+
+3. **Use GitHub Models in Pipeline**:
+```python
+from src.pipeline import Pipeline, configs
+
+# Use GitHub Models
+pipeline = Pipeline('.', run_config=configs['github'])
+
+# Or use GitHub Models with multi-path retrieval
+pipeline = Pipeline('.', run_config=configs['github_multi'])
+```
+
+**Available GitHub Models**:
+- `openai/gpt-4.1` - Latest GPT-4.1 (recommended)
+- `openai/gpt-4o` - Vision-capable
+- `openai/gpt-4o-mini` - Fast and cheap
+- `anthropic/claude-3.5-sonnet` - Great reasoning
+- `meta/llama-3.3-70b-instruct` - Open source
+- `deepseek/deepseek-r1` - Reasoning model
+
+The WebUI automatically uses the configured provider based on your pipeline settings.
+
 ## Requirements
 
 - Python 3.9+

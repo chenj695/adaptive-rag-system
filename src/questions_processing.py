@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Dict, Optional, Literal
 from dotenv import load_dotenv
-from openai import OpenAI
 from pydantic import BaseModel
 from tqdm import tqdm
 
@@ -16,16 +15,17 @@ from src.prompts import (
     NumberSchemaPrompt, BooleanSchemaPrompt, NameSchemaPrompt,
     AnswerSchemaFixPrompt
 )
+from src.github_models_client import UnifiedLLMClient
 
 
 class OpenAIProcessor:
-    """Handles all LLM interactions."""
+    """Handles all LLM interactions - supports OpenAI and GitHub Models."""
     
     def __init__(self, api_provider: str = "openai", model: str = "o3-mini-2025-01-31"):
         load_dotenv()
         self.api_provider = api_provider
         self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = UnifiedLLMClient(api_provider=api_provider, model=model)
         self.response_data = {}
 
     def get_answer_from_rag_context(self, question: str, rag_context: any, 
@@ -48,26 +48,33 @@ class OpenAIProcessor:
         else:
             context_text = str(rag_context)
         
+        messages = [
+            {"role": "system", "content": prompt_obj.system_prompt_with_schema},
+            {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {question}"}
+        ]
+        
         try:
-            completion = self.client.beta.chat.completions.parse(
-                model=model,
-                messages=[
-                    {"role": "system", "content": prompt_obj.system_prompt_with_schema},
-                    {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {question}"}
-                ],
-                response_format=prompt_obj.AnswerSchema
+            # Use unified client for both OpenAI and GitHub Models
+            parsed = self.client.parse_structured_output(
+                messages=messages,
+                response_schema=prompt_obj.AnswerSchema,
+                temperature=0.3
             )
-            parsed = completion.choices[0].message.parsed
             self.response_data = {
-                "model": completion.model,
-                "input_tokens": completion.usage.prompt_tokens,
-                "output_tokens": completion.usage.completion_tokens
+                "model": self.client.model,
+                "provider": self.api_provider
             }
-            return parsed.model_dump()
+            return parsed
         except Exception as e:
             # Try to fix malformed response
-            raw_response = completion.choices[0].message.content if 'completion' in locals() else ""
-            return self.fix_answer_schema(raw_response, prompt_obj.system_prompt_with_schema)
+            try:
+                raw_response = self.client.get_completion(
+                    messages=messages,
+                    temperature=0.3
+                )
+                return self.fix_answer_schema(raw_response, prompt_obj.system_prompt_with_schema)
+            except:
+                return {"final_answer": "N/A", "error": str(e), "step_by_step_analysis": "", "reasoning_summary": ""}
 
     def fix_answer_schema(self, response: str, system_prompt: str) -> dict:
         """Fix malformed JSON responses."""
@@ -76,14 +83,16 @@ class OpenAIProcessor:
             response=response
         )
         try:
-            completion = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": AnswerSchemaFixPrompt.system_prompt},
-                    {"role": "user", "content": fix_prompt}
-                ]
+            messages = [
+                {"role": "system", "content": AnswerSchemaFixPrompt.system_prompt},
+                {"role": "user", "content": fix_prompt}
+            ]
+            # Use unified client
+            content = self.client.get_completion(
+                messages=messages,
+                temperature=0.3
             )
-            return json.loads(completion.choices[0].message.content)
+            return json.loads(content)
         except:
             return {"final_answer": "N/A", "error": "Failed to parse", "step_by_step_analysis": "", "reasoning_summary": ""}
 
