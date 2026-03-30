@@ -7,6 +7,7 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.document import ConversionResult
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.settings import settings
+from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from tabulate import tabulate
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -31,7 +32,7 @@ def _process_chunk(chunk: List[Path], pdf_backend, output_dir: Path,
 
 
 class PdfParser:
-    def __init__(self, doc_dir: Path, output_dir: Path, pdf_backend: str = "dlparse_v2",
+    def __init__(self, doc_dir: Path, output_dir: Path, pdf_backend: str = "pypdfium2",
                  num_threads: int = 4, metadata_lookup: dict = None, 
                  debug_data_path: Path = None):
         self.doc_dir = doc_dir
@@ -46,12 +47,13 @@ class PdfParser:
         settings.perf.doc_batch_size = 1
         settings.perf.page_batch_size = 1
         
-        # Initialize converter
+        # Initialize converter with proper backend
+        # Use PyPdfiumDocumentBackend class directly instead of string
         self.converter = DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(
                     pipeline_options=None,
-                    backend=pdf_backend
+                    backend=PyPdfiumDocumentBackend
                 )
             }
         )
