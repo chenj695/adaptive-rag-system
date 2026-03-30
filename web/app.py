@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -11,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.pipeline import Pipeline, configs, RunConfig
 from src.retrieval import HybridRetriever
 from src.multi_path_retrieval import MultiPathRetriever
+
+_log = logging.getLogger(__name__)
 
 
 def create_app():
@@ -45,25 +48,49 @@ def create_app():
     def get_documents():
         """Get list of all available documents."""
         try:
-            # Try multi-path retriever first, fallback to HybridRetriever
-            try:
-                retriever = MultiPathRetriever(
-                    pipeline.vector_dbs_dir,
-                    pipeline.databases_dir / "bm25_indices",
-                    pipeline.merged_reports_dir
-                )
-            except:
-                retriever = HybridRetriever(
-                    pipeline.vector_dbs_dir,
-                    pipeline.merged_reports_dir
-                )
+            # Check if vector databases exist
+            if not pipeline.vector_dbs_dir.exists() or not list(pipeline.vector_dbs_dir.glob("*.faiss")):
+                return jsonify({
+                    'success': True,
+                    'documents': [],
+                    'retrieval_mode': 'none',
+                    'message': 'No processed documents found. Please upload and process PDFs first.'
+                })
+            
+            # Try multi-path retriever first (if BM25 indices exist), fallback to HybridRetriever
+            bm25_dir = pipeline.databases_dir / "bm25_indices"
+            has_bm25 = bm25_dir.exists() and any(bm25_dir.glob("*.pkl"))
+            
+            if has_bm25:
+                try:
+                    retriever = MultiPathRetriever(
+                        pipeline.vector_dbs_dir,
+                        bm25_dir,
+                        pipeline.merged_reports_dir
+                    )
+                    documents = retriever.get_all_documents()
+                    return jsonify({
+                        'success': True,
+                        'documents': documents,
+                        'retrieval_mode': 'multi_path'
+                    })
+                except Exception as e:
+                    _log.warning(f"MultiPathRetriever failed: {e}, falling back to HybridRetriever")
+            
+            # Fallback to HybridRetriever
+            retriever = HybridRetriever(
+                pipeline.vector_dbs_dir,
+                pipeline.merged_reports_dir
+            )
             documents = retriever.get_all_documents()
             return jsonify({
                 'success': True,
                 'documents': documents,
-                'retrieval_mode': 'multi_path'
+                'retrieval_mode': 'standard'
             })
         except Exception as e:
+            import logging
+            logging.error(f"Error in get_documents: {e}")
             return jsonify({
                 'success': False,
                 'error': str(e)
@@ -144,45 +171,20 @@ def create_app():
             if not question:
                 return jsonify({'success': False, 'error': 'Question is required'}), 400
             
-            # Check if BM25 indices exist
-            bm25_dir = pipeline.databases_dir / "bm25_indices"
-            has_bm25 = bm25_dir.exists() and any(bm25_dir.glob("*.pkl"))
+            # Check if documents have been processed
+            if not pipeline.vector_dbs_dir.exists() or not list(pipeline.vector_dbs_dir.glob("*.faiss")):
+                return jsonify({
+                    'success': False, 
+                    'error': 'No processed documents found. Please upload and process PDFs first.'
+                }), 400
             
-            if has_bm25:
-                # Use multi-path retrieval
-                retriever = MultiPathRetriever(
-                    pipeline.vector_dbs_dir,
-                    bm25_dir,
-                    pipeline.merged_reports_dir,
-                    rrf_k=60
-                )
-                
-                # Get document sha1 if not specified
-                if not sha1_name:
-                    all_docs = retriever.get_all_documents()
-                    if all_docs:
-                        sha1_name = all_docs[0]["sha1_name"]
-                    else:
-                        return jsonify({'success': False, 'error': 'No documents available'}), 400
-                
-                # Multi-path retrieval
-                results = retriever.retrieve_by_document(
-                    sha1_name=sha1_name,
-                    query=question,
-                    semantic_top_n=20,
-                    lexical_top_n=20,
-                    fusion_top_k=20,
-                    use_reranking=False,
-                    top_n=6
-                )
-                
-                # Generate answer using the pipeline
-                answer = pipeline.query_single(question, sha1_name)
-                answer['retrieval_method'] = 'multi_path'
-                answer['rrf_k'] = 60
-            else:
-                # Fallback to standard pipeline
-                answer = pipeline.query_single(question, sha1_name)
+            # Generate answer using the pipeline (it handles multi-path vs standard internally)
+            answer = pipeline.query_single(question, sha1_name)
+            
+            # Determine retrieval method from answer or pipeline config
+            retrieval_method = answer.get('retrieval_method', 'standard')
+            if hasattr(pipeline.run_config, 'use_multi_path') and pipeline.run_config.use_multi_path:
+                retrieval_method = 'multi_path'
             
             return jsonify({
                 'success': True,
@@ -190,7 +192,7 @@ def create_app():
                 'reasoning': answer.get('reasoning_summary', ''),
                 'analysis': answer.get('step_by_step_analysis', ''),
                 'pages': answer.get('relevant_pages', []),
-                'retrieval_method': answer.get('retrieval_method', 'standard'),
+                'retrieval_method': retrieval_method,
                 'context': [
                     {
                         'page': ctx.get('page', 0),
@@ -201,6 +203,9 @@ def create_app():
                 'schema': answer.get('schema', 'unknown')
             })
         except Exception as e:
+            _log.error(f"Error in query: {e}")
+            import traceback
+            _log.error(traceback.format_exc())
             return jsonify({
                 'success': False,
                 'error': str(e)
