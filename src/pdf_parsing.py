@@ -1,16 +1,24 @@
 import json
 import logging
 import time
+import hashlib
 from pathlib import Path
 from typing import List, Optional
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.document import ConversionResult
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.settings import settings
-from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
-from tabulate import tabulate
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# Try docling import, fallback to basic PyPDF2 if not available or fails
+try:
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.document import ConversionResult
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from docling.datamodel.settings import settings
+    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+    DOCLING_AVAILABLE = True
+except ImportError:
+    DOCLING_AVAILABLE = False
+
+from tabulate import tabulate
 
 _log = logging.getLogger(__name__)
 
@@ -43,38 +51,123 @@ class PdfParser:
         self.metadata_lookup = metadata_lookup or {}
         self.debug_data_path = debug_data_path
         
-        # Configure docling settings
-        settings.perf.doc_batch_size = 1
-        settings.perf.page_batch_size = 1
-        
-        # Initialize converter with proper backend
-        # Use PyPdfiumDocumentBackend class directly instead of string
-        self.converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(
-                    pipeline_options=None,
-                    backend=PyPdfiumDocumentBackend
+        # Initialize converter - use simple mode if docling not available or for offline
+        if DOCLING_AVAILABLE:
+            try:
+                # Configure docling settings to avoid downloading models
+                settings.perf.doc_batch_size = 1
+                settings.perf.page_batch_size = 1
+                
+                # Initialize converter with proper backend
+                self.converter = DocumentConverter(
+                    format_options={
+                        InputFormat.PDF: PdfFormatOption(
+                            pipeline_options=None,
+                            backend=PyPdfiumDocumentBackend
+                        )
+                    }
                 )
-            }
-        )
+                self.use_docling = True
+            except Exception as e:
+                _log.warning(f"Docling initialization failed: {e}, falling back to basic parser")
+                self.use_docling = False
+        else:
+            _log.info("Docling not available, using basic PyPDF2 parser")
+            self.use_docling = False
         
         self.json_processor = JsonReportProcessor(
             metadata_lookup=metadata_lookup,
             debug_data_path=debug_data_path
         )
 
-    def parse_single_pdf(self, pdf_path: Path) -> ConversionResult:
+    def parse_single_pdf(self, pdf_path: Path):
         """Parse a single PDF file."""
         _log.info(f"Processing {pdf_path.name}")
-        result = self.converter.convert(pdf_path)
         
-        assembled_report = self.json_processor.assemble_report(result)
+        if self.use_docling:
+            try:
+                result = self.converter.convert(pdf_path)
+                assembled_report = self.json_processor.assemble_report(result)
+            except Exception as e:
+                _log.warning(f"Docling failed for {pdf_path.name}: {e}, using basic parser")
+                assembled_report = self._parse_with_pypdf2(pdf_path)
+        else:
+            assembled_report = self._parse_with_pypdf2(pdf_path)
         
         output_path = self.output_dir / f"{assembled_report['metainfo']['sha1_name']}.json"
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(assembled_report, f, indent=2, ensure_ascii=False)
         
-        return result
+        return assembled_report
+    
+    def _parse_with_pypdf2(self, pdf_path: Path) -> dict:
+        """Fallback PDF parser using PyPDF2 - no external model downloads."""
+        try:
+            from PyPDF2 import PdfReader
+        except ImportError:
+            raise ImportError("PyPDF2 not installed. Run: pip install PyPDF2")
+        
+        _log.info(f"Using PyPDF2 fallback for {pdf_path.name}")
+        
+        reader = PdfReader(str(pdf_path))
+        num_pages = len(reader.pages)
+        
+        # Generate sha1_name from filename
+        sha1_name = hashlib.sha1(pdf_path.name.encode()).hexdigest()[:16]
+        
+        # Extract text from each page
+        pages_content = []
+        for page_num, page in enumerate(reader.pages, 1):
+            try:
+                text = page.extract_text() or ""
+                pages_content.append({
+                    'page': page_num,
+                    'content': [{
+                        'type': 'text',
+                        'text': text,
+                        'bbox': {}
+                    }],
+                    'page_dimensions': {}
+                })
+            except Exception as e:
+                _log.warning(f"Failed to extract page {page_num}: {e}")
+                pages_content.append({
+                    'page': page_num,
+                    'content': [],
+                    'page_dimensions': {}
+                })
+        
+        # Create content chunks for embedding
+        chunks = []
+        for page in pages_content:
+            page_text = ' '.join([c['text'] for c in page['content'] if c.get('text')])
+            if page_text.strip():
+                chunks.append({
+                    'page': page['page'],
+                    'text': page_text[:2000]  # Limit chunk size
+                })
+        
+        assembled_report = {
+            'metainfo': {
+                'sha1_name': sha1_name,
+                'filename': pdf_path.name,
+                'pages_amount': num_pages,
+                'text_blocks_amount': sum(len(p['content']) for p in pages_content),
+                'tables_amount': 0,
+                'pictures_amount': 0,
+                'equations_amount': 0,
+                'footnotes_amount': 0,
+                'document_name': pdf_path.stem
+            },
+            'content': {
+                'pages': pages_content,
+                'chunks': chunks
+            },
+            'tables': [],
+            'pictures': []
+        }
+        
+        return assembled_report
 
     def parse_pdfs_sequential(self):
         """Parse all PDFs sequentially."""
