@@ -1,3 +1,6 @@
+"""
+PDF Parsing module - uses PyPDF2 only (no Hugging Face downloads required)
+"""
 import json
 import logging
 import time
@@ -7,30 +10,21 @@ from typing import List, Optional
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-# Try docling import, fallback to basic PyPDF2 if not available or fails
+# Only use PyPDF2 - no docling to avoid Hugging Face downloads
 try:
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.document import ConversionResult
-    from docling.document_converter import DocumentConverter, PdfFormatOption
-    from docling.datamodel.settings import settings
-    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
-    DOCLING_AVAILABLE = True
+    from PyPDF2 import PdfReader
+    PYPDF2_AVAILABLE = True
 except ImportError:
-    DOCLING_AVAILABLE = False
-
-from tabulate import tabulate
+    PYPDF2_AVAILABLE = False
 
 _log = logging.getLogger(__name__)
 
 
-def _process_chunk(chunk: List[Path], pdf_backend, output_dir: Path, 
-                   num_threads: int, metadata_lookup: dict, debug_data_path: Path):
+def _process_chunk(chunk: List[Path], output_dir: Path, metadata_lookup: dict, debug_data_path: Path):
     """Process a chunk of PDFs in a separate process."""
     parser = PdfParser(
         doc_dir=None,
         output_dir=output_dir,
-        pdf_backend=pdf_backend,
-        num_threads=num_threads,
         metadata_lookup=metadata_lookup,
         debug_data_path=debug_data_path
     )
@@ -40,74 +34,26 @@ def _process_chunk(chunk: List[Path], pdf_backend, output_dir: Path,
 
 
 class PdfParser:
-    def __init__(self, doc_dir: Path, output_dir: Path, pdf_backend: str = "pypdfium2",
+    """PDF parser using PyPDF2 - works offline without AI model downloads."""
+    
+    def __init__(self, doc_dir: Path, output_dir: Path, pdf_backend: str = None,
                  num_threads: int = 4, metadata_lookup: dict = None, 
                  debug_data_path: Path = None):
+        if not PYPDF2_AVAILABLE:
+            raise ImportError("PyPDF2 is required. Run: pip install PyPDF2")
+        
         self.doc_dir = doc_dir
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.pdf_backend = pdf_backend
         self.num_threads = num_threads
         self.metadata_lookup = metadata_lookup or {}
         self.debug_data_path = debug_data_path
         
-        # Initialize converter - use simple mode if docling not available or for offline
-        if DOCLING_AVAILABLE:
-            try:
-                # Configure docling settings to avoid downloading models
-                settings.perf.doc_batch_size = 1
-                settings.perf.page_batch_size = 1
-                
-                # Initialize converter with proper backend
-                self.converter = DocumentConverter(
-                    format_options={
-                        InputFormat.PDF: PdfFormatOption(
-                            pipeline_options=None,
-                            backend=PyPdfiumDocumentBackend
-                        )
-                    }
-                )
-                self.use_docling = True
-            except Exception as e:
-                _log.warning(f"Docling initialization failed: {e}, falling back to basic parser")
-                self.use_docling = False
-        else:
-            _log.info("Docling not available, using basic PyPDF2 parser")
-            self.use_docling = False
-        
-        self.json_processor = JsonReportProcessor(
-            metadata_lookup=metadata_lookup,
-            debug_data_path=debug_data_path
-        )
+        _log.info("Using PyPDF2 parser (no external downloads required)")
 
-    def parse_single_pdf(self, pdf_path: Path):
-        """Parse a single PDF file."""
+    def parse_single_pdf(self, pdf_path: Path) -> dict:
+        """Parse a single PDF file using PyPDF2."""
         _log.info(f"Processing {pdf_path.name}")
-        
-        if self.use_docling:
-            try:
-                result = self.converter.convert(pdf_path)
-                assembled_report = self.json_processor.assemble_report(result)
-            except Exception as e:
-                _log.warning(f"Docling failed for {pdf_path.name}: {e}, using basic parser")
-                assembled_report = self._parse_with_pypdf2(pdf_path)
-        else:
-            assembled_report = self._parse_with_pypdf2(pdf_path)
-        
-        output_path = self.output_dir / f"{assembled_report['metainfo']['sha1_name']}.json"
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(assembled_report, f, indent=2, ensure_ascii=False)
-        
-        return assembled_report
-    
-    def _parse_with_pypdf2(self, pdf_path: Path) -> dict:
-        """Fallback PDF parser using PyPDF2 - no external model downloads."""
-        try:
-            from PyPDF2 import PdfReader
-        except ImportError:
-            raise ImportError("PyPDF2 not installed. Run: pip install PyPDF2")
-        
-        _log.info(f"Using PyPDF2 fallback for {pdf_path.name}")
         
         reader = PdfReader(str(pdf_path))
         num_pages = len(reader.pages)
@@ -117,6 +63,8 @@ class PdfParser:
         
         # Extract text from each page
         pages_content = []
+        chunks = []
+        
         for page_num, page in enumerate(reader.pages, 1):
             try:
                 text = page.extract_text() or ""
@@ -129,22 +77,33 @@ class PdfParser:
                     }],
                     'page_dimensions': {}
                 })
+                
+                # Create chunks for embedding
+                if text.strip():
+                    # Split long text into smaller chunks
+                    words = text.split()
+                    chunk_size = 300
+                    overlap = 50
+                    
+                    for i in range(0, len(words), chunk_size - overlap):
+                        chunk_words = words[i:i + chunk_size]
+                        chunk_text = ' '.join(chunk_words)
+                        if chunk_text.strip():
+                            chunks.append({
+                                'page': page_num,
+                                'text': chunk_text
+                            })
+                        
+                        # Limit chunks per page to avoid too many
+                        if len(chunks) > 100:
+                            break
+                            
             except Exception as e:
                 _log.warning(f"Failed to extract page {page_num}: {e}")
                 pages_content.append({
                     'page': page_num,
                     'content': [],
                     'page_dimensions': {}
-                })
-        
-        # Create content chunks for embedding
-        chunks = []
-        for page in pages_content:
-            page_text = ' '.join([c['text'] for c in page['content'] if c.get('text')])
-            if page_text.strip():
-                chunks.append({
-                    'page': page['page'],
-                    'text': page_text[:2000]  # Limit chunk size
                 })
         
         assembled_report = {
@@ -167,18 +126,33 @@ class PdfParser:
             'pictures': []
         }
         
+        # Save output
+        output_path = self.output_dir / f"{sha1_name}.json"
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(assembled_report, f, indent=2, ensure_ascii=False)
+        
         return assembled_report
 
     def parse_pdfs_sequential(self):
         """Parse all PDFs sequentially."""
+        if self.doc_dir is None:
+            return
         pdf_files = list(self.doc_dir.glob("*.pdf"))
         for pdf_path in pdf_files:
             self.parse_single_pdf(pdf_path)
 
     def parse_pdfs_parallel(self, optimal_workers: int = 10, chunk_size: int = None):
         """Parse PDFs in parallel using multiple processes."""
+        if self.doc_dir is None:
+            return
+            
         input_doc_paths = list(self.doc_dir.glob("*.pdf"))
         total_pdfs = len(input_doc_paths)
+        
+        if total_pdfs == 0:
+            _log.warning("No PDF files found")
+            return
+            
         _log.info(f"Starting parallel processing of {total_pdfs} documents")
         
         cpu_count = multiprocessing.cpu_count()
@@ -196,9 +170,7 @@ class PdfParser:
                 executor.submit(
                     _process_chunk,
                     chunk,
-                    self.pdf_backend,
                     self.output_dir,
-                    self.num_threads,
                     self.metadata_lookup,
                     self.debug_data_path
                 )
@@ -218,168 +190,21 @@ class PdfParser:
         _log.info(f"Parallel processing completed in {elapsed_time:.2f} seconds.")
 
 
+# Keep JsonReportProcessor for backward compatibility
 class JsonReportProcessor:
     def __init__(self, metadata_lookup: dict = None, debug_data_path: Path = None):
         self.metadata_lookup = metadata_lookup or {}
         self.debug_data_path = debug_data_path
 
     def assemble_report(self, conv_result, normalized_data=None):
-        """Assemble the report from conversion result."""
-        data = normalized_data if normalized_data is not None else conv_result.document.export_to_dict()
-        assembled_report = {}
-        assembled_report['metainfo'] = self.assemble_metainfo(data)
-        assembled_report['content'] = self.assemble_content(data)
-        assembled_report['tables'] = self.assemble_tables(conv_result.document.tables, data)
-        assembled_report['pictures'] = self.assemble_pictures(data)
-        self.debug_data(data)
-        return assembled_report
-
-    def assemble_metainfo(self, data):
-        """Extract metadata from document."""
-        metainfo = {}
-        sha1_name = data['origin']['filename'].rsplit('.', 1)[0]
-        metainfo['sha1_name'] = sha1_name
-        metainfo['filename'] = data['origin']['filename']
-        metainfo['pages_amount'] = len(data.get('pages', []))
-        metainfo['text_blocks_amount'] = len(data.get('texts', []))
-        metainfo['tables_amount'] = len(data.get('tables', []))
-        metainfo['pictures_amount'] = len(data.get('pictures', []))
-        metainfo['equations_amount'] = len(data.get('equations', []))
-        metainfo['footnotes_amount'] = len([t for t in data.get('texts', []) if t.get('label') == 'footnote'])
-        
-        if self.metadata_lookup and sha1_name in self.metadata_lookup:
-            csv_meta = self.metadata_lookup[sha1_name]
-            metainfo['document_name'] = csv_meta.get('document_name', sha1_name)
-        else:
-            metainfo['document_name'] = sha1_name
-        
-        return metainfo
-
-    def assemble_content(self, data):
-        """Assemble document content by pages."""
-        pages = {}
-        
-        for text_item in data.get('texts', []):
-            if 'prov' in text_item and text_item['prov']:
-                page_num = text_item['prov'][0]['page_no']
-                if page_num not in pages:
-                    pages[page_num] = {
-                        'page': page_num,
-                        'content': [],
-                        'page_dimensions': text_item['prov'][0].get('bbox', {})
-                    }
-                pages[page_num]['content'].append({
-                    'type': text_item.get('label', 'text'),
-                    'text': text_item.get('text', ''),
-                    'bbox': text_item['prov'][0].get('bbox', {})
-                })
-        
-        sorted_pages = [pages[page_num] for page_num in sorted(pages.keys())]
-        return sorted_pages
-
-    def assemble_tables(self, tables, data):
-        """Assemble tables from document."""
-        assembled_tables = []
-        for i, table in enumerate(tables):
-            table_json_obj = table.model_dump()
-            table_md = self._table_to_md(table_json_obj)
-            table_html = table.export_to_html()
-            table_data = data['tables'][i]
-            table_page_num = table_data['prov'][0]['page_no']
-            table_bbox = table_data['prov'][0]['bbox']
-            table_bbox = [
-                table_bbox['l'],
-                table_bbox['t'],
-                table_bbox['r'],
-                table_bbox['b']
-            ]
-            nrows = table_data['data']['num_rows']
-            ncols = table_data['data']['num_cols']
-            ref_num = table_data['self_ref'].split('/')[-1]
-            ref_num = int(ref_num)
-            
-            table_obj = {
-                'table_id': ref_num,
-                'page': table_page_num,
-                'bbox': table_bbox,
-                '#-rows': nrows,
-                '#-cols': ncols,
-                'markdown': table_md,
-                'html': table_html,
-                'json': table_json_obj
-            }
-            assembled_tables.append(table_obj)
-        return assembled_tables
-
-    def _table_to_md(self, table):
-        """Convert table to markdown format."""
-        table_data = []
-        for row in table['data']['grid']:
-            table_row = [cell['text'] for cell in row]
-            table_data.append(table_row)
-        
-        if len(table_data) > 1 and len(table_data[0]) > 0:
-            try:
-                md_table = tabulate(table_data[1:], headers=table_data[0], tablefmt="github")
-            except ValueError:
-                md_table = tabulate(table_data[1:], headers=table_data[0], tablefmt="github", disable_numparse=True)
-        else:
-            md_table = tabulate(table_data, tablefmt="github")
-        return md_table
-
-    def assemble_pictures(self, data):
-        """Assemble pictures from document."""
-        assembled_pictures = []
-        for i, picture in enumerate(data.get('pictures', [])):
-            children_list = self._process_picture_block(picture, data)
-            ref_num = picture['self_ref'].split('/')[-1]
-            ref_num = int(ref_num)
-            picture_page_num = picture['prov'][0]['page_no']
-            picture_bbox = picture['prov'][0]['bbox']
-            picture_bbox = [
-                picture_bbox['l'],
-                picture_bbox['t'],
-                picture_bbox['r'],
-                picture_bbox['b']
-            ]
-            picture_obj = {
-                'picture_id': ref_num,
-                'page': picture_page_num,
-                'bbox': picture_bbox,
-                'children': children_list,
-            }
-            assembled_pictures.append(picture_obj)
-        return assembled_pictures
-
-    def _process_picture_block(self, picture, data):
-        """Process picture children."""
-        children_list = []
-        for item in picture.get('children', []):
-            if isinstance(item, dict) and '$ref' in item:
-                ref = item['$ref']
-                ref_type, ref_num = ref.split('/')[-2:]
-                ref_num = int(ref_num)
-                if ref_type == 'texts':
-                    content_item = self._process_text_reference(ref_num, data)
-                    if content_item:
-                        children_list.append(content_item)
-        return children_list
-
-    def _process_text_reference(self, ref_num, data):
-        """Process text reference."""
-        if ref_num < len(data.get('texts', [])):
-            text_item = data['texts'][ref_num]
-            return {
-                'type': text_item.get('label', 'text'),
-                'text': text_item.get('text', '')
-            }
-        return None
+        """Assemble the report - PyPDF2 already returns assembled format."""
+        return conv_result
 
     def debug_data(self, data):
         """Save debug data if path is set."""
         if self.debug_data_path is None:
             return
-        doc_name = data.get('name', 'unknown')
+        doc_name = data.get('metainfo', {}).get('sha1_name', 'unknown')
         path = self.debug_data_path / f"{doc_name}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as f:
