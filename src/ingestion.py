@@ -72,7 +72,7 @@ class VectorDBIngestor:
     # Other options: "all-MiniLM-L6-v2" (faster), "all-mpnet-base-v2" (better quality)
     DEFAULT_MODEL = "all-MiniLM-L6-v2"
     
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = None, model_path: str = None):
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
             raise ImportError(
                 "sentence-transformers is required for local embeddings.\n"
@@ -80,15 +80,28 @@ class VectorDBIngestor:
                 "Or use the API-based version by setting OPENAI_API_KEY"
             )
         
+        # Check for local path first (for offline/air-gapped servers)
+        self.model_path = model_path or os.getenv("EMBEDDING_MODEL_PATH")
         self.model_name = model_name or os.getenv("EMBEDDING_MODEL", self.DEFAULT_MODEL)
         self.model = None  # Lazy load
-        print(f"Using local embedding model: {self.model_name}")
+        
+        if self.model_path:
+            print(f"Using local embedding model from: {self.model_path}")
+        else:
+            print(f"Using embedding model: {self.model_name}")
 
     def _load_model(self):
         """Lazy load the sentence-transformers model."""
         if self.model is None:
-            print(f"Loading embedding model: {self.model_name}...")
-            self.model = SentenceTransformer(self.model_name)
+            if self.model_path:
+                # Load from custom local path (for air-gapped/offline servers)
+                print(f"Loading embedding model from: {self.model_path}...")
+                self.model = SentenceTransformer(self.model_path)
+            else:
+                # Load from HuggingFace/cache (requires internet on first run)
+                print(f"Loading embedding model: {self.model_name}...")
+                self.model = SentenceTransformer(self.model_name)
+            
             print(f"Model loaded. Embedding dimension: {self.model.get_sentence_embedding_dimension()}")
         return self.model
 

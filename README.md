@@ -191,6 +191,28 @@ To use a different model, set in `.env`:
 EMBEDDING_MODEL=all-MiniLM-L6-v2
 ```
 
+### Air-Gapped/Offline Servers
+
+If your server has no internet access:
+
+1. **Download model on another machine** (with internet):
+```bash
+git lfs install
+git clone https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+```
+
+2. **Transfer to your server** via SCP/USB:
+```bash
+scp -r all-MiniLM-L6-v2 root@your-server:/path/to/models/
+```
+
+3. **Set the local path in `.env`**:
+```bash
+EMBEDDING_MODEL_PATH=/path/to/models/all-MiniLM-L6-v2
+```
+
+The system will load the model directly from this path without any network requests.
+
 ## License
 
 MIT License - Based on [RAG Challenge 2](https://github.com/IlyaRice/RAG-Challenge-2)
