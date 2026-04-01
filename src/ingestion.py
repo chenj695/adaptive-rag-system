@@ -34,7 +34,18 @@ class BM25Ingestor:
             with open(report_path, 'r', encoding='utf-8') as f:
                 report_data = json.load(f)
             
-            text_chunks = [chunk['text'] for chunk in report_data['content']['chunks']]
+            # Handle both formats
+            content = report_data.get('content', {})
+            if isinstance(content, dict):
+                chunks = content.get('chunks', [])
+            else:
+                chunks = content
+            
+            text_chunks = [chunk['text'] for chunk in chunks if 'text' in chunk]
+            if not text_chunks:
+                print(f"Warning: No text chunks found in {report_path.name}")
+                continue
+                
             bm25_index = self.create_bm25_index(text_chunks)
             
             sha1_name = report_data["metainfo"]["sha1_name"]
@@ -88,7 +99,17 @@ class VectorDBIngestor:
 
     def _process_report(self, report: dict):
         """Process single report."""
-        text_chunks = [chunk['text'] for chunk in report['content']['chunks']]
+        # Handle both formats
+        content = report.get('content', {})
+        if isinstance(content, dict):
+            chunks = content.get('chunks', [])
+        else:
+            chunks = content
+        
+        text_chunks = [chunk['text'] for chunk in chunks if 'text' in chunk]
+        if not text_chunks:
+            raise ValueError("No text chunks found in report")
+            
         embeddings = self._get_embeddings(text_chunks)
         index = self._create_vector_db(embeddings)
         return index
