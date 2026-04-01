@@ -69,7 +69,14 @@ class TextSplitter:
                 parsed_report = json.load(f)
             tables_by_page = self._get_serialized_tables_by_page(parsed_report.get('tables', []))
         
-        for page in file_content['content']['pages']:
+        # Handle both formats
+        content = file_content.get('content', {})
+        if isinstance(content, dict):
+            pages = content.get('pages', [])
+        else:
+            pages = content
+            
+        for page in pages:
             page_chunks = self._split_page(page)
             for chunk in page_chunks:
                 chunk['id'] = chunk_id
@@ -85,7 +92,12 @@ class TextSplitter:
                     chunk_id += 1
                     chunks.append(table)
         
-        file_content['content']['chunks'] = chunks
+        # Ensure content is a dict with chunks
+        if isinstance(file_content.get('content'), dict):
+            file_content['content']['chunks'] = chunks
+        else:
+            file_content['content'] = {'pages': pages, 'chunks': chunks}
+        
         return file_content
     
     def split_all_reports(self, all_report_dir: Path, output_dir: Path, 

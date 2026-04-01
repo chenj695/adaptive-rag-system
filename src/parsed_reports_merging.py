@@ -16,7 +16,19 @@ class ReportsProcessor:
         self.report_data = report_data
         processed_pages = []
         
-        for page in report_data.get("content", []):
+        # Handle both formats:
+        # Old docling: content = [{"page": 1, ...}, {"page": 2, ...}]
+        # New PyPDF2: content = {"pages": [{"page": 1, ...}], "chunks": [...]}
+        content = report_data.get("content", [])
+        
+        if isinstance(content, dict):
+            # PyPDF2 format: content is a dict with "pages" key
+            pages = content.get("pages", [])
+        else:
+            # Old docling format: content is a list
+            pages = content
+        
+        for page in pages:
             page_text = self.process_page(page["page"])
             processed_pages.append({
                 "page": page["page"],
@@ -46,7 +58,14 @@ class ReportsProcessor:
     
     def _get_page_data(self, page_number):
         """Get page data by page number."""
-        all_pages = self.report_data.get("content", [])
+        content = self.report_data.get("content", [])
+        
+        # Handle both formats
+        if isinstance(content, dict):
+            all_pages = content.get("pages", [])
+        else:
+            all_pages = content
+            
         for page in all_pages:
             if page.get("page") == page_number:
                 return page
