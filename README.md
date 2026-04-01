@@ -25,6 +25,7 @@ The system features a clean atmospheric science-themed interface:
 - ⚡ **Parallel Processing**: Multi-process PDF parsing for speed
 - 🌳 **RAPTOR Support**: Hierarchical retrieval with tree-based document organization
 - 📊 **Evaluation Framework**: Comprehensive metrics (Recall, Precision, NDCG, MRR)
+- 🔒 **Fully Offline**: Local embeddings with sentence-transformers (no API calls for vectorization)
 
 ## Project Structure
 
@@ -121,7 +122,7 @@ print(answer['reasoning_summary'])
 
 1. **PDF Parsing**: Docling extracts text, tables, and structure
 2. **Text Splitting**: Documents chunked with 300-token overlap
-3. **Vectorization**: OpenAI `text-embedding-3-large` creates embeddings
+3. **Vectorization**: Local `sentence-transformers` model creates embeddings (offline, no API)
 4. **Retrieval**: FAISS finds top-k similar chunks
 5. **Reranking**: GPT-4o-mini scores relevance 0-1
 6. **Answer Generation**: o3-mini generates structured answer with reasoning
@@ -173,9 +174,22 @@ The WebUI automatically uses the configured provider based on your pipeline sett
 ## Requirements
 
 - Python 3.9+
-- OpenAI API key
+- OpenAI API key (only for LLM generation, not embeddings)
 - 8GB+ RAM (for PDF processing)
 - Optional: GPU for faster Docling processing
+
+## Embedding Model
+
+The system uses **local sentence-transformers** for embeddings:
+- **Default**: `all-MiniLM-L6-v2` (384 dimensions, fast)
+- **Alternative**: `all-mpnet-base-v2` (better quality, slower)
+- First run downloads ~80MB model to local cache
+- No API calls required - works completely offline for vectorization
+
+To use a different model, set in `.env`:
+```bash
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+```
 
 ## License
 

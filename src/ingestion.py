@@ -1,17 +1,26 @@
+"""
+Vector database ingestion using local sentence-transformers model.
+No API calls required - works completely offline.
+"""
 import os
 import json
 import pickle
 from typing import List, Union
 from pathlib import Path
 from tqdm import tqdm
-from dotenv import load_dotenv
-from openai import OpenAI
 from rank_bm25 import BM25Okapi
 
 __all__ = ['VectorDBIngestor', 'BM25Ingestor']
 import faiss
 import numpy as np
-from tenacity import retry, wait_fixed, stop_after_attempt
+
+# Try to import sentence-transformers
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    print("Warning: sentence-transformers not installed. Run: pip install sentence-transformers")
 
 
 class BM25Ingestor:
@@ -57,43 +66,60 @@ class BM25Ingestor:
 
 
 class VectorDBIngestor:
-    """Create FAISS vector databases."""
+    """Create FAISS vector databases using local sentence-transformers model."""
     
-    def __init__(self):
-        self.llm = self._set_up_llm()
-
-    def _set_up_llm(self):
-        load_dotenv()
-        llm = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=None,
-            max_retries=2
-        )
-        return llm
-
-    @retry(wait=wait_fixed(20), stop=stop_after_attempt(2))
-    def _get_embeddings(self, text: Union[str, List[str]], model: str = "text-embedding-3-large") -> List[float]:
-        """Get embeddings from OpenAI API."""
-        if isinstance(text, str) and not text.strip():
-            raise ValueError("Input text cannot be an empty string.")
+    # Default local model - good balance of speed and quality
+    # Other options: "all-MiniLM-L6-v2" (faster), "all-mpnet-base-v2" (better quality)
+    DEFAULT_MODEL = "all-MiniLM-L6-v2"
+    
+    def __init__(self, model_name: str = None):
+        if not SENTENCE_TRANSFORMERS_AVAILABLE:
+            raise ImportError(
+                "sentence-transformers is required for local embeddings.\n"
+                "Install with: pip install sentence-transformers\n"
+                "Or use the API-based version by setting OPENAI_API_KEY"
+            )
         
-        if isinstance(text, list):
-            text_chunks = [text[i:i + 1024] for i in range(0, len(text), 1024)]
-        else:
-            text_chunks = [text]
-        
-        embeddings = []
-        for chunk in text_chunks:
-            response = self.llm.embeddings.create(input=chunk, model=model)
-            embeddings.extend([embedding.embedding for embedding in response.data])
-        
-        return embeddings
+        self.model_name = model_name or os.getenv("EMBEDDING_MODEL", self.DEFAULT_MODEL)
+        self.model = None  # Lazy load
+        print(f"Using local embedding model: {self.model_name}")
 
-    def _create_vector_db(self, embeddings: List[float]):
+    def _load_model(self):
+        """Lazy load the sentence-transformers model."""
+        if self.model is None:
+            print(f"Loading embedding model: {self.model_name}...")
+            self.model = SentenceTransformer(self.model_name)
+            print(f"Model loaded. Embedding dimension: {self.model.get_sentence_embedding_dimension()}")
+        return self.model
+
+    def _get_embeddings(self, texts: Union[str, List[str]]) -> List[List[float]]:
+        """Get embeddings using local sentence-transformers model."""
+        model = self._load_model()
+        
+        # Handle single text
+        if isinstance(texts, str):
+            texts = [texts]
+        
+        # Filter out empty texts
+        texts = [t for t in texts if t and t.strip()]
+        if not texts:
+            raise ValueError("No valid text to embed")
+        
+        # Get embeddings - this is done locally, no API calls
+        embeddings = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+        
+        return embeddings.tolist()
+
+    def _create_vector_db(self, embeddings: List[List[float]]):
         """Create FAISS index from embeddings."""
         embeddings_array = np.array(embeddings, dtype=np.float32)
-        dimension = len(embeddings[0])
-        index = faiss.IndexFlatIP(dimension)  # Inner product for cosine similarity
+        dimension = embeddings_array.shape[1]
+        
+        # Normalize for cosine similarity
+        faiss.normalize_L2(embeddings_array)
+        
+        # Inner product index (cosine similarity after normalization)
+        index = faiss.IndexFlatIP(dimension)
         index.add(embeddings_array)
         return index
 
