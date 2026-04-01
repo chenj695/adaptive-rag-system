@@ -24,9 +24,12 @@ class ReportsProcessor:
         if isinstance(content, dict):
             # PyPDF2 format: content is a dict with "pages" key
             pages = content.get("pages", [])
+            # Also preserve existing chunks if they exist
+            existing_chunks = content.get("chunks", [])
         else:
             # Old docling format: content is a list
             pages = content
+            existing_chunks = []
         
         for page in pages:
             page_text = self.process_page(page["page"])
@@ -35,10 +38,21 @@ class ReportsProcessor:
                 "text": page_text
             })
         
-        return {
+        # Return format compatible with text_splitter
+        # Include chunks if they already exist (from PyPDF2)
+        result = {
             "metainfo": report_data.get("metainfo", {}),
             "pages": processed_pages
         }
+        
+        # If PyPDF2 already created chunks, preserve them in content dict format
+        if existing_chunks:
+            result["content"] = {
+                "pages": processed_pages,
+                "chunks": existing_chunks
+            }
+        
+        return result
     
     def process_page(self, page_number: int) -> str:
         """Process a single page and return markdown text."""
