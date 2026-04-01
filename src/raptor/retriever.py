@@ -1,4 +1,4 @@
-"""RAPTOR retriever implementation."""
+"""RAPTOR retriever implementation using local embeddings."""
 
 import logging
 from typing import List, Dict, Optional, Tuple
@@ -8,12 +8,13 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from .models import RaptorTree, TreeNode
+from src.local_embeddings import get_embedding_model
 
 logger = logging.getLogger(__name__)
 
 
 class RaptorRetriever:
-    """Retrieve from RAPTOR tree at multiple levels."""
+    """Retrieve from RAPTOR tree at multiple levels using local embeddings."""
     
     def __init__(
         self,
@@ -25,8 +26,8 @@ class RaptorRetriever:
         """Initialize RAPTOR retriever.
         
         Args:
-            llm_client: OpenAI client
-            embedding_model: Embedding model name
+            llm_client: OpenAI client (for generation, not embeddings)
+            embedding_model: Embedding model name (legacy, kept for API compatibility)
             top_k_per_level: How many nodes to retrieve per level
             max_nodes: Maximum total nodes to retrieve
         """
@@ -35,6 +36,8 @@ class RaptorRetriever:
         self.top_k_per_level = top_k_per_level
         self.max_nodes = max_nodes
         self.trees: Dict[str, RaptorTree] = {}
+        # Use local embedding model for queries
+        self.local_embedder = get_embedding_model()
     
     def load_tree(self, tree_path: Path, sha1_name: str):
         """Load a RAPTOR tree from file."""
@@ -52,22 +55,16 @@ class RaptorRetriever:
             self.load_tree(tree_path, sha1_name)
     
     def _get_query_embedding(self, query: str) -> np.ndarray:
-        """Get embedding for query."""
-        response = self.llm.embeddings.create(
-            input=query,
-            model=self.embedding_model
-        )
-        return np.array(response.data[0].embedding).reshape(1, -1)
+        """Get embedding for query using local model."""
+        embedding = self.local_embedder.encode(query)
+        return np.array(embedding).reshape(1, -1)
     
     def _get_node_embedding(self, node: TreeNode) -> Optional[np.ndarray]:
         """Get embedding for node, computing if necessary."""
         if node.embedding is None:
             try:
-                response = self.llm.embeddings.create(
-                    input=node.text[:8000],
-                    model=self.embedding_model
-                )
-                node.embedding = response.data[0].embedding
+                embedding = self.local_embedder.encode(node.text[:8000])
+                node.embedding = embedding.tolist()
             except Exception as e:
                 logger.error(f"Failed to get embedding: {e}")
                 return None
@@ -84,7 +81,7 @@ class RaptorRetriever:
         
         Args:
             query: Query text
-            tree: RaptorTree to search
+            tree: RAPTOR tree to search
             strategy: "multi_level", "leaf_only", "root_to_leaf"
             
         Returns:

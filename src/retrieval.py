@@ -4,24 +4,25 @@ from pathlib import Path
 from typing import List, Dict
 import faiss
 import numpy as np
-from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
 from src.reranking import LLMReranker
+from src.local_embeddings import get_embedding_model
 
 _log = logging.getLogger(__name__)
 
 
 class VectorRetriever:
-    """FAISS-based vector retrieval."""
+    """FAISS-based vector retrieval using local embeddings."""
     
     def __init__(self, vector_db_dir: Path, documents_dir: Path):
         self.vector_db_dir = Path(vector_db_dir)
         self.documents_dir = Path(documents_dir)
         self.all_dbs = self._load_all_vector_dbs()
         load_dotenv()
-        self.llm = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Use local embedding model instead of OpenAI API
+        self.embedding_model = get_embedding_model()
 
     def _load_all_vector_dbs(self) -> List[Dict]:
         """Load all FAISS indexes and associated documents."""
@@ -81,13 +82,12 @@ class VectorRetriever:
         
         actual_top_n = min(top_n, len(chunks))
         
-        # Get query embedding
-        embedding = self.llm.embeddings.create(
-            input=query,
-            model="text-embedding-3-large"
-        )
-        embedding = embedding.data[0].embedding
-        embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+        # Get query embedding using local model
+        embedding = self.embedding_model.encode(query)
+        embedding_array = np.array(embedding, dtype=np.float32)
+        
+        # Normalize for cosine similarity (same as during indexing)
+        faiss.normalize_L2(embedding_array)
         
         # Search FAISS index
         distances, indices = vector_db.search(x=embedding_array, k=actual_top_n)

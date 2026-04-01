@@ -1,4 +1,4 @@
-"""Evaluation runner for comparing RAG strategies."""
+"""Evaluation runner for comparing RAG strategies using local embeddings."""
 
 import logging
 import time
@@ -11,6 +11,7 @@ import numpy as np
 from ..pipeline import Pipeline
 from ..raptor.tree_builder import RaptorTreeBuilder
 from ..raptor.retriever import RaptorRetriever
+from ..local_embeddings import get_embedding_model
 from .metrics import (
     RetrievalResult, EvaluationMetrics, evaluate_retrieval,
     compare_strategies, generate_evaluation_report, calculate_statistical_significance
@@ -40,14 +41,16 @@ class RAGEvaluator:
         """Initialize evaluator.
         
         Args:
-            llm_client: OpenAI client
-            embedding_model: Embedding model name
+            llm_client: OpenAI client (for generation, not embeddings)
+            embedding_model: Legacy parameter (kept for API compatibility)
             output_dir: Where to save evaluation results
         """
         self.llm = llm_client
         self.embedding_model = embedding_model
         self.output_dir = Path(output_dir) if output_dir else Path("evaluation_results")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # Use local embedding model
+        self.local_embedder = get_embedding_model()
         
         self.strategies = {}
         self.results = {}
@@ -219,12 +222,13 @@ def create_test_queries_from_qa_pairs(
     Args:
         qa_pairs: List of dicts with 'question', 'answer', 'document'
         chunked_reports_dir: Directory with chunked reports
-        llm_client: OpenAI client
+        llm_client: OpenAI client (for generation, not embeddings)
         
     Returns:
         List of TestQuery with computed ground truth
     """
     test_queries = []
+    local_embedder = get_embedding_model()
     
     for qa in qa_pairs:
         question = qa['question']
@@ -235,7 +239,7 @@ def create_test_queries_from_qa_pairs(
         relevant_chunks = _find_relevant_chunks(
             question, expected_answer,
             chunked_reports_dir, document,
-            llm_client
+            local_embedder
         )
         
         test_queries.append(TestQuery(
@@ -253,7 +257,7 @@ def _find_relevant_chunks(
     expected_answer: str,
     chunked_reports_dir: Path,
     document_name: str,
-    llm_client,
+    local_embedder,
     top_k: int = 5
 ) -> Set[str]:
     """Find relevant chunks for a Q&A pair.
@@ -262,9 +266,9 @@ def _find_relevant_chunks(
     """
     relevant = set()
     
-    # Get embeddings
-    q_emb = _get_embedding(question, llm_client)
-    a_emb = _get_embedding(expected_answer, llm_client)
+    # Get embeddings using local model
+    q_emb = local_embedder.encode(question)
+    a_emb = local_embedder.encode(expected_answer)
     
     # Combine embeddings (weighted average)
     combined = 0.6 * np.array(q_emb) + 0.4 * np.array(a_emb)
@@ -286,7 +290,7 @@ def _find_relevant_chunks(
         if not chunk_text:
             continue
         
-        c_emb = _get_embedding(chunk_text[:1000], llm_client)
+        c_emb = local_embedder.encode(chunk_text[:1000])
         score = np.dot(combined, c_emb) / (np.linalg.norm(combined) * np.linalg.norm(c_emb))
         
         chunk_id = chunk.get('id', i)
@@ -298,15 +302,6 @@ def _find_relevant_chunks(
         relevant.add(str(chunk_id))
     
     return relevant
-
-
-def _get_embedding(text: str, llm_client) -> List[float]:
-    """Get embedding for text."""
-    response = llm_client.embeddings.create(
-        input=text[:8000],
-        model="text-embedding-3-large"
-    )
-    return response.data[0].embedding
 
 
 # Pre-defined test queries for common RAG scenarios

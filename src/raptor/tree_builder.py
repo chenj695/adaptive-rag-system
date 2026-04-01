@@ -1,20 +1,20 @@
-"""RAPTOR tree builder implementation."""
+"""RAPTOR tree builder implementation using local embeddings."""
 
 import logging
 from typing import List, Dict, Optional
 from pathlib import Path
 import json
 import numpy as np
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .models import TreeNode, RaptorTree
 from .clustering import perform_clustering
+from src.local_embeddings import get_embedding_model
 
 logger = logging.getLogger(__name__)
 
 
 class RaptorTreeBuilder:
-    """Build RAPTOR tree from document chunks."""
+    """Build RAPTOR tree from document chunks using local embeddings."""
     
     def __init__(
         self,
@@ -29,8 +29,8 @@ class RaptorTreeBuilder:
         """Initialize RAPTOR tree builder.
         
         Args:
-            llm_client: OpenAI client for embeddings and summarization
-            embedding_model: Model for embeddings
+            llm_client: OpenAI client for summarization (embeddings use local model)
+            embedding_model: Legacy parameter (kept for API compatibility)
             max_levels: Maximum tree levels (0 = leaves only)
             target_chunk_size: Target token count for summary chunks
             cluster_threshold: GMM probability threshold
@@ -44,30 +44,19 @@ class RaptorTreeBuilder:
         self.cluster_threshold = cluster_threshold
         self.cluster_dim = cluster_dim
         self.summary_length = summary_length
+        # Use local embedding model
+        self.local_embedder = get_embedding_model()
     
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def _get_embedding(self, text: str) -> List[float]:
-        """Get embedding for text."""
-        response = self.llm.embeddings.create(
-            input=text[:8000],  # Truncate if too long
-            model=self.embedding_model
-        )
-        return response.data[0].embedding
+        """Get embedding for text using local model."""
+        embedding = self.local_embedder.encode(text[:8000])  # Truncate if too long
+        return embedding.tolist()
     
     def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings for multiple texts."""
-        embeddings = []
-        batch_size = 100
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            response = self.llm.embeddings.create(
-                input=batch,
-                model=self.embedding_model
-            )
-            embeddings.extend([e.embedding for e in response.data])
-        
-        return embeddings
+        """Get embeddings for multiple texts using local model."""
+        # Local model handles batching efficiently
+        embeddings = self.local_embedder.encode(texts)
+        return embeddings.tolist()
     
     def _summarize_cluster(self, texts: List[str], level: int) -> str:
         """Generate summary for a cluster of texts.

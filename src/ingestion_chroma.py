@@ -1,4 +1,4 @@
-"""Chroma-based vector database implementation.
+"""Chroma-based vector database implementation using local embeddings.
 
 This is an alternative to FAISS with better metadata support.
 Install: pip install chromadb
@@ -9,14 +9,14 @@ from typing import List, Dict
 from pathlib import Path
 from tqdm import tqdm
 from dotenv import load_dotenv
-from openai import OpenAI
 import chromadb
 from chromadb.config import Settings
-from tenacity import retry, wait_fixed, stop_after_attempt
+
+from src.local_embeddings import get_embedding_model
 
 
 class ChromaIngestor:
-    """Create and manage Chroma vector database."""
+    """Create and manage Chroma vector database using local embeddings."""
     
     def __init__(self, persist_directory: Path = None):
         """Initialize Chroma client.
@@ -26,7 +26,8 @@ class ChromaIngestor:
                              If None, uses in-memory mode.
         """
         load_dotenv()
-        self.llm = self._set_up_llm()
+        # Use local embedding model instead of OpenAI
+        self.embedding_model = get_embedding_model()
         
         # Initialize Chroma client
         if persist_directory:
@@ -43,29 +44,12 @@ class ChromaIngestor:
             # In-memory mode (data lost on restart)
             self.client = chromadb.Client()
     
-    def _set_up_llm(self):
-        """Initialize OpenAI client for embeddings."""
-        llm = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=None,
-            max_retries=2
-        )
-        return llm
-    
-    @retry(wait=wait_fixed(20), stop=stop_after_attempt(2))
-    def _get_embeddings(self, texts: List[str], model: str = "text-embedding-3-large") -> List[List[float]]:
-        """Get embeddings from OpenAI API."""
+    def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings using local model."""
         # Handle empty strings
         texts = [t if t.strip() else " " for t in texts]
-        
-        # Batch in chunks of 1024 (OpenAI limit)
-        all_embeddings = []
-        for i in range(0, len(texts), 1024):
-            chunk = texts[i:i + 1024]
-            response = self.llm.embeddings.create(input=chunk, model=model)
-            all_embeddings.extend([e.embedding for e in response.data])
-        
-        return all_embeddings
+        embeddings = self.embedding_model.encode(texts)
+        return embeddings.tolist()
     
     def create_or_get_collection(self, name: str = "documents"):
         """Get or create a Chroma collection."""
@@ -137,7 +121,7 @@ class ChromaIngestor:
         if not texts:
             return {"added": 0, "error": "No valid chunks"}
         
-        # Get embeddings
+        # Get embeddings using local model
         embeddings = self._get_embeddings(texts)
         
         # Add to Chroma in batches (Chroma has 5461 limit per add)
@@ -246,12 +230,13 @@ class ChromaIngestor:
 
 
 class ChromaRetriever:
-    """Retrieve documents from Chroma."""
+    """Retrieve documents from Chroma using local embeddings."""
     
     def __init__(self, persist_directory: Path = None, collection_name: str = "documents"):
         """Initialize retriever."""
         load_dotenv()
-        self.llm = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Use local embedding model
+        self.embedding_model = get_embedding_model()
         
         if persist_directory:
             self.client = chromadb.PersistentClient(path=str(persist_directory))
@@ -260,10 +245,10 @@ class ChromaRetriever:
         
         self.collection = self.client.get_or_create_collection(collection_name)
     
-    def _get_query_embedding(self, query: str, model: str = "text-embedding-3-large") -> List[float]:
-        """Get embedding for query."""
-        response = self.llm.embeddings.create(input=query, model=model)
-        return response.data[0].embedding
+    def _get_query_embedding(self, query: str) -> List[float]:
+        """Get embedding for query using local model."""
+        embedding = self.embedding_model.encode(query)
+        return embedding.tolist()
     
     def retrieve(self, 
                  query: str, 
