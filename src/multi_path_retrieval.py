@@ -156,7 +156,7 @@ class VectorRetriever:
         
         # Get query embedding using local model
         embedding = self.embedding_model.encode(query)
-        embedding_array = np.array(embedding, dtype=np.float32)
+        embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
         
         # Normalize for cosine similarity (same as during indexing)
         faiss.normalize_L2(embedding_array)
