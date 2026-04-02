@@ -150,7 +150,10 @@ def create_app():
                 'schema': answer.get('schema', 'general')
             })
         except Exception as e:
-            return jsonify({'success': False, 'error': str(e)}), 500
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"QUERY ERROR: {str(e)}\n{error_detail}")
+            return jsonify({'success': False, 'error': str(e), 'traceback': error_detail}), 500
 
     @app.route('/api/stats', methods=['GET'])
     def get_stats():

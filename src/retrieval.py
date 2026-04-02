@@ -77,10 +77,34 @@ class VectorRetriever:
         
         document = target_report["document"]
         vector_db = target_report["vector_db"]
-        chunks = document["content"]["chunks"]
-        pages = document["content"]["pages"]
         
-        actual_top_n = min(top_n, len(chunks))
+        # Handle both content formats (PyPDF2 chunks vs docling chunks)
+        content = document.get("content", {})
+        if isinstance(content, dict):
+            chunks = content.get("chunks", [])
+            pages = content.get("pages", [])
+        else:
+            chunks = content
+            pages = []
+        
+        if not chunks:
+            _log.warning(f"No chunks found in document {sha1_name}")
+            return []
+        
+        # Check for index/chunk mismatch
+        index_size = vector_db.ntotal
+        chunk_count = len(chunks)
+        if index_size != chunk_count:
+            _log.warning(f"Mismatch in {sha1_name}: FAISS index has {index_size} vectors, but document has {chunk_count} chunks")
+            # Use the minimum to avoid out-of-bounds errors
+            effective_count = min(index_size, chunk_count)
+        else:
+            effective_count = chunk_count
+        
+        actual_top_n = min(top_n, effective_count)
+        if actual_top_n <= 0:
+            _log.warning(f"Cannot retrieve: effective_count={effective_count}, top_n={top_n}")
+            return []
         
         # Get query embedding using local model
         embedding = self.embedding_model.encode(query)
@@ -95,25 +119,36 @@ class VectorRetriever:
         retrieval_results = []
         seen_pages = set()
         
-        for distance, index in zip(distances[0], indices[0]):
+        for distance, chunk_idx in zip(distances[0], indices[0]):
             distance = round(float(distance), 4)
-            chunk = chunks[index]
-            parent_page = next((p for p in pages if p["page"] == chunk["page"]), None)
+            
+            # Safety check for index bounds
+            if chunk_idx < 0 or chunk_idx >= len(chunks):
+                _log.warning(f"Index {chunk_idx} out of bounds for chunks list (len={len(chunks)})")
+                continue
+            
+            chunk = chunks[chunk_idx]
+            chunk_page_num = chunk.get("page", 0)
+            
+            # Find parent page if available
+            parent_page = None
+            if pages:
+                parent_page = next((p for p in pages if p.get("page") == chunk_page_num), None)
             
             if return_parent_pages:
-                if parent_page and parent_page["page"] not in seen_pages:
+                if parent_page and parent_page.get("page") not in seen_pages:
                     seen_pages.add(parent_page["page"])
                     result = {
                         "distance": distance,
-                        "page": parent_page["page"],
-                        "text": parent_page["text"]
+                        "page": parent_page.get("page", chunk_page_num),
+                        "text": parent_page.get("text", chunk.get("text", ""))
                     }
                     retrieval_results.append(result)
             else:
                 result = {
                     "distance": distance,
-                    "page": chunk["page"],
-                    "text": chunk["text"]
+                    "page": chunk_page_num,
+                    "text": chunk.get("text", "")
                 }
                 retrieval_results.append(result)
         
@@ -131,14 +166,24 @@ class VectorRetriever:
             raise ValueError(f"No report found with sha1 '{sha1_name}'")
         
         document = target_report["document"]
-        pages = document["content"]["pages"]
+        
+        # Handle both content formats
+        content = document.get("content", {})
+        if isinstance(content, dict):
+            pages = content.get("pages", [])
+        else:
+            pages = []
+        
+        if not pages:
+            _log.warning(f"No pages found in document {sha1_name}")
+            return []
         
         all_pages = []
-        for page in sorted(pages, key=lambda p: p["page"]):
+        for page in sorted(pages, key=lambda p: p.get("page", 0)):
             result = {
                 "distance": 0.5,
-                "page": page["page"],
-                "text": page["text"]
+                "page": page.get("page", 0),
+                "text": page.get("text", "")
             }
             all_pages.append(result)
         return all_pages

@@ -73,7 +73,17 @@ class BM25Retriever:
         
         document = target_report["document"]
         bm25_index = target_report["bm25_index"]
-        chunks = document["content"]["chunks"]
+        
+        # Handle both content formats
+        content = document.get("content", {})
+        if isinstance(content, dict):
+            chunks = content.get("chunks", [])
+        else:
+            chunks = content
+        
+        if not chunks:
+            _log.warning(f"No chunks found in document {sha1_name}")
+            return []
         
         actual_top_n = min(top_n, len(chunks))
         
@@ -88,11 +98,15 @@ class BM25Retriever:
         
         retrieval_results = []
         for idx in top_indices:
+            # Safety check
+            if idx < 0 or idx >= len(chunks):
+                _log.warning(f"BM25 index {idx} out of bounds for chunks list (len={len(chunks)})")
+                continue
             chunk = chunks[idx]
             result = {
                 "score": float(scores[idx]),
-                "page": chunk["page"],
-                "text": chunk["text"],
+                "page": chunk.get("page", 0),
+                "text": chunk.get("text", ""),
                 "rank": len(retrieval_results) + 1
             }
             retrieval_results.append(result)
@@ -150,9 +164,31 @@ class VectorRetriever:
         
         document = target_report["document"]
         vector_db = target_report["vector_db"]
-        chunks = document["content"]["chunks"]
         
-        actual_top_n = min(top_n, len(chunks))
+        # Handle both content formats
+        content = document.get("content", {})
+        if isinstance(content, dict):
+            chunks = content.get("chunks", [])
+        else:
+            chunks = content
+        
+        if not chunks:
+            _log.warning(f"No chunks found in document {sha1_name}")
+            return []
+        
+        # Check for index/chunk mismatch
+        index_size = vector_db.ntotal
+        chunk_count = len(chunks)
+        if index_size != chunk_count:
+            _log.warning(f"Mismatch in {sha1_name}: FAISS index has {index_size} vectors, but document has {chunk_count} chunks")
+            effective_count = min(index_size, chunk_count)
+        else:
+            effective_count = chunk_count
+        
+        actual_top_n = min(top_n, effective_count)
+        if actual_top_n <= 0:
+            _log.warning(f"Cannot retrieve: effective_count={effective_count}, top_n={top_n}")
+            return []
         
         # Get query embedding using local model
         embedding = self.embedding_model.encode(query)
@@ -165,12 +201,17 @@ class VectorRetriever:
         distances, indices = vector_db.search(x=embedding_array, k=actual_top_n)
         
         retrieval_results = []
-        for rank, (distance, idx) in enumerate(zip(distances[0], indices[0]), 1):
-            chunk = chunks[idx]
+        for rank, (distance, chunk_idx) in enumerate(zip(distances[0], indices[0]), 1):
+            # Safety check for index bounds
+            if chunk_idx < 0 or chunk_idx >= len(chunks):
+                _log.warning(f"FAISS index {chunk_idx} out of bounds for chunks list (len={len(chunks)})")
+                continue
+            
+            chunk = chunks[chunk_idx]
             result = {
                 "score": float(distance),
-                "page": chunk["page"],
-                "text": chunk["text"],
+                "page": chunk.get("page", 0),
+                "text": chunk.get("text", ""),
                 "rank": rank
             }
             retrieval_results.append(result)
