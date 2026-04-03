@@ -15,8 +15,9 @@ _log = logging.getLogger(__name__)
 class VectorRetriever:
     """FAISS-based vector retrieval using local embeddings."""
 
-    def __init__(self, vector_db_dir: Path, documents_dir: Path):
+    def __init__(self, vector_db_dir: Path, chunked_reports_dir: Path, documents_dir: Path):
         self.vector_db_dir = Path(vector_db_dir)
+        self.chunked_reports_dir = Path(chunked_reports_dir)
         self.documents_dir = Path(documents_dir)
         load_dotenv()
         self.embedding_model = get_embedding_model()
@@ -28,18 +29,26 @@ class VectorRetriever:
 
         for faiss_file in self.vector_db_dir.glob("*.faiss"):
             sha1_name = faiss_file.stem
-            json_path = self.documents_dir / f"{sha1_name}.json"
+            chunked_json_path = self.chunked_reports_dir / f"{sha1_name}.json"
+            merged_json_path = self.documents_dir / f"{sha1_name}.json"
 
-            if not json_path.exists():
-                _log.warning("Document file not found for %s", sha1_name)
+            if not chunked_json_path.exists():
+                _log.warning("Chunked document file not found for %s", sha1_name)
                 continue
 
-            with open(json_path, "r", encoding="utf-8") as f:
-                document = json.load(f)
+            if not merged_json_path.exists():
+                _log.warning("Merged document file not found for %s", sha1_name)
+                continue
+
+            with open(chunked_json_path, "r", encoding="utf-8") as f:
+                chunked_document = json.load(f)
+
+            with open(merged_json_path, "r", encoding="utf-8") as f:
+                merged_document = json.load(f)
 
             index = faiss.read_index(str(faiss_file))
 
-            content = document.get("content", {})
+            content = chunked_document.get("content", {})
             if isinstance(content, dict):
                 chunks = content.get("chunks", [])
             elif isinstance(content, list):
@@ -60,7 +69,8 @@ class VectorRetriever:
             all_dbs.append({
                 "sha1_name": sha1_name,
                 "vector_db": index,
-                "document": document
+                "chunked_document": chunked_document,
+                "merged_document": merged_document
             })
 
         return all_dbs
@@ -68,7 +78,7 @@ class VectorRetriever:
     def get_all_documents(self) -> List[Dict]:
         docs = []
         for db in self.all_dbs:
-            metainfo = db["document"].get("metainfo", {})
+            metainfo = db["merged_document"].get("metainfo", {})
             docs.append({
                 "sha1_name": metainfo.get("sha1_name", db["sha1_name"]),
                 "document_name": metainfo.get("document_name", ""),
@@ -88,18 +98,28 @@ class VectorRetriever:
         if target_report is None:
             raise ValueError(f"No report found with sha1 '{sha1_name}'")
 
-        document = target_report["document"]
+        chunked_document = target_report["chunked_document"]
+        merged_document = target_report["merged_document"]
         vector_db = target_report["vector_db"]
 
-        content = document.get("content", {})
+        chunked_content = chunked_document.get("content", {})
+        merged_content = merged_document.get("content", {})
+
+        content = chunked_content if isinstance(chunked_content, dict) else {}
+        merged = merged_content if isinstance(merged_content, dict) else {}
+
         if isinstance(content, dict):
             chunks = content.get("chunks", [])
-            pages = content.get("pages", [])
-        elif isinstance(content, list):
-            chunks = content
-            pages = []
+        elif isinstance(chunked_content, list):
+            chunks = chunked_content
         else:
             chunks = []
+
+        pages = merged.get("pages", [])
+        if not pages and isinstance(content, dict):
+            pages = content.get("pages", [])
+
+        if isinstance(chunked_content, list):
             pages = []
 
         if not chunks:
@@ -157,8 +177,11 @@ class VectorRetriever:
         if target_report is None:
             raise ValueError(f"No report found with sha1 '{sha1_name}'")
 
-        content = target_report["document"].get("content", {})
-        pages = content.get("pages", []) if isinstance(content, dict) else []
+        content = target_report["merged_document"].get("content", {})
+        if isinstance(content, dict):
+            pages = content.get("pages", [])
+        else:
+            pages = []
         if not pages:
             return []
 
@@ -172,8 +195,8 @@ class VectorRetriever:
 class HybridRetriever:
     """Combines vector retrieval with LLM reranking."""
 
-    def __init__(self, vector_db_dir: Path, documents_dir: Path):
-        self.vector_retriever = VectorRetriever(vector_db_dir, documents_dir)
+    def __init__(self, vector_db_dir: Path, chunked_reports_dir: Path, documents_dir: Path):
+        self.vector_retriever = VectorRetriever(vector_db_dir, chunked_reports_dir, documents_dir)
         self.reranker = LLMReranker()
 
     def get_all_documents(self) -> List[Dict]:

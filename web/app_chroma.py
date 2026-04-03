@@ -68,6 +68,7 @@ def create_app(use_chroma: bool = True):
                 from src.retrieval import HybridRetriever
                 retriever = HybridRetriever(
                     pipeline.vector_dbs_dir,
+                    pipeline.chunked_reports_dir,
                     pipeline.merged_reports_dir
                 )
                 documents = retriever.get_all_documents()

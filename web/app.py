@@ -47,7 +47,8 @@ def create_app():
                 return jsonify({'success': True, 'documents': []})
 
             retriever = HybridRetriever(
-                pipeline.vector_dbs_dir, 
+                pipeline.vector_dbs_dir,
+                pipeline.chunked_reports_dir,
                 pipeline.merged_reports_dir
             )
             # 获取文档数据
@@ -110,6 +111,12 @@ def create_app():
             pipeline.parse_pdf_reports(parallel=True, max_workers=4)
             pipeline.merge_reports()
             pipeline.chunk_reports()
+
+            # 清理历史索引，确保 FAISS 与当前 chunked 报告一致
+            if pipeline.vector_dbs_dir.exists():
+                for faiss_file in pipeline.vector_dbs_dir.glob("*.faiss"):
+                    faiss_file.unlink()
+
             pipeline.create_vector_dbs()
 
             return jsonify({

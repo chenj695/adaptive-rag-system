@@ -100,8 +100,8 @@ class OpenAIProcessor:
 class QuestionsProcessor:
     """Main question processing orchestrator."""
     
-    def __init__(self, questions_file: Optional[Path], vector_db_dir: Path, 
-                 documents_dir: Path, markdown_reports_dir: Path = None, 
+    def __init__(self, questions_file: Optional[Path], vector_db_dir: Path,
+                 documents_dir: Path, chunked_reports_dir: Path = None, markdown_reports_dir: Path = None,
                  run_config=None, bm25_dir: Path = None):
         self.questions_file = questions_file
         self.questions = self._load_questions(questions_file) if questions_file else []
@@ -122,7 +122,8 @@ class QuestionsProcessor:
             )
             self.use_multi_path = True
         else:
-            self.retriever = HybridRetriever(vector_db_dir, documents_dir)
+            chunked_path = chunked_reports_dir or (Path(vector_db_dir).parent / "chunked_reports")
+            self.retriever = HybridRetriever(vector_db_dir, chunked_path, documents_dir)
             self.use_multi_path = False
         
         self.markdown_reports_dir = markdown_reports_dir

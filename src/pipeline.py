@@ -270,6 +270,7 @@ class Pipeline:
             questions_file=questions_file,
             vector_db_dir=self.vector_dbs_dir,
             documents_dir=documents_dir,
+            chunked_reports_dir=self.chunked_reports_dir,
             markdown_reports_dir=self.markdown_reports_dir,
             run_config=self.run_config
         )
@@ -290,6 +291,7 @@ class Pipeline:
             questions_file=None,
             vector_db_dir=self.vector_dbs_dir,
             documents_dir=self.merged_reports_dir,
+            chunked_reports_dir=self.chunked_reports_dir,
             markdown_reports_dir=self.markdown_reports_dir,
             run_config=self.run_config
         )
