@@ -1,8 +1,11 @@
 """GitHub Models Inference API Client - OpenAI-compatible"""
 import json
+import logging
 import os
 from typing import List, Dict, Any, Optional
 import requests
+
+_log = logging.getLogger(__name__)
 
 
 def parse_json_object_from_llm_text(content: Optional[str]) -> Dict[str, Any]:
@@ -142,11 +145,41 @@ class UnifiedLLMClient:
             )
             return parse_json_object_from_llm_text(content)
         else:
-            # OpenAI - use beta.parse
-            completion = self.client.beta.chat.completions.parse(
-                model=self.model,
-                messages=messages,
-                response_format=response_schema,
-                temperature=temperature
-            )
-            return completion.choices[0].message.parsed.model_dump()
+            # 官方 OpenAI：优先 beta.parse；GitHub Models 等兼容端通常不支持 parse
+            try:
+                completion = self.client.beta.chat.completions.parse(
+                    model=self.model,
+                    messages=messages,
+                    response_format=response_schema,
+                    temperature=temperature,
+                )
+                parsed = completion.choices[0].message.parsed
+                if parsed is None:
+                    raise ValueError("message.parsed is None")
+                return parsed.model_dump()
+            except Exception as exc:
+                _log.warning(
+                    "beta.chat.completions.parse unavailable (%s); using JSON object mode",
+                    exc,
+                )
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    response_format={"type": "json_object"},
+                )
+                content = (response.choices[0].message.content or "").strip()
+                return parse_json_object_from_llm_text(content)
+            except Exception as exc2:
+                _log.warning(
+                    "JSON object mode failed (%s); trying plain completion",
+                    exc2,
+                )
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                )
+                content = (response.choices[0].message.content or "").strip()
+                return parse_json_object_from_llm_text(content)
