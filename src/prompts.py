@@ -150,7 +150,8 @@ Answer rules:
 - Put the direct, user-facing answer in final_answer as one or more short paragraphs (plain text, not JSON inside the string).
 - Use step_by_step_analysis for structured reasoning (cite pages and quotes where helpful).
 - Do not invent facts beyond the context.
-- If the context is insufficient, set final_answer to "N/A" and explain why in reasoning_summary.
+- If the context contains ANY relevant definitions, mechanisms, or facts (even partial), you MUST synthesize final_answer from that material. Use "N/A" only when the context truly has zero usable information for the question.
+- Always return valid JSON with all four keys populated whenever possible; do not leave reasoning_summary or step_by_step_analysis empty if you provide an answer.
 """
     class AnswerSchema(BaseModel):
         step_by_step_analysis: str = Field(

@@ -5,6 +5,22 @@ from typing import List, Dict, Any, Optional
 import requests
 
 
+def parse_json_object_from_llm_text(content: Optional[str]) -> Dict[str, Any]:
+    """Extract and parse a JSON object from model output (handles ``` fences and preamble)."""
+    if not content or not str(content).strip():
+        raise ValueError("empty LLM content")
+    s = str(content).strip()
+    if s.startswith("```"):
+        s = s.strip("`")
+        if s.lower().startswith("json"):
+            s = s[4:].lstrip("\n").strip()
+    start = s.find("{")
+    end = s.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("no JSON object in LLM content")
+    return json.loads(s[start : end + 1])
+
+
 class GitHubModelsClient:
     """Client for GitHub Models Inference API"""
     
@@ -110,14 +126,14 @@ class UnifiedLLMClient:
         """Get structured JSON output"""
         
         if isinstance(self.client, GitHubModelsClient):
-            # GitHub Models - use JSON mode
+            # GitHub Models - use JSON mode (output may still include markdown; parse robustly)
             content = self.client.get_completion(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
                 response_format={"type": "json_object"}
             )
-            return json.loads(content)
+            return parse_json_object_from_llm_text(content)
         else:
             # OpenAI - use beta.parse
             completion = self.client.beta.chat.completions.parse(

@@ -15,7 +15,7 @@ from src.prompts import (
     NumberSchemaPrompt, BooleanSchemaPrompt, NameSchemaPrompt,
     ExplanationSchemaPrompt, AnswerSchemaFixPrompt
 )
-from src.github_models_client import UnifiedLLMClient
+from src.github_models_client import UnifiedLLMClient, parse_json_object_from_llm_text
 
 
 class OpenAIProcessor:
@@ -40,18 +40,12 @@ class OpenAIProcessor:
         }
         prompt_obj = schema_prompts.get(schema, NumberSchemaPrompt())
         
-        # Format context
-        if isinstance(rag_context, list):
-            context_text = "\n\n---\n\n".join([
-                f"Page {doc.get('page', 'N/A')}:\n{doc.get('text', '')}"
-                for doc in rag_context
-            ])
-        else:
-            context_text = str(rag_context)
+        context_text = OpenAIProcessor._build_context_text(rag_context)
         
+        user_body = f"Context:\n{context_text}\n\nQuestion: {question}"
         messages = [
             {"role": "system", "content": prompt_obj.system_prompt_with_schema},
-            {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {question}"}
+            {"role": "user", "content": user_body}
         ]
         
         try:
@@ -65,7 +59,7 @@ class OpenAIProcessor:
                 "model": self.client.model,
                 "provider": self.api_provider
             }
-            return parsed
+            return self._normalize_answer_dict(parsed, schema)
         except Exception as e:
             # Try to fix malformed response
             try:
@@ -73,15 +67,89 @@ class OpenAIProcessor:
                     messages=messages,
                     temperature=0.3
                 )
-                return self.fix_answer_schema(raw_response, prompt_obj.system_prompt_with_schema)
-            except:
+                fixed = self.fix_answer_schema(raw_response, prompt_obj.system_prompt_with_schema)
+                return self._normalize_answer_dict(fixed, schema)
+            except Exception:
                 return {"final_answer": "N/A", "error": str(e), "step_by_step_analysis": "", "reasoning_summary": ""}
+
+    @staticmethod
+    def _build_context_text(rag_context) -> str:
+        """Cap context size so GitHub / smaller-context models still return valid JSON answers."""
+        max_per = int(os.getenv("RAG_ANSWER_MAX_CHARS_PER_PAGE", "8000"))
+        max_total = int(os.getenv("RAG_ANSWER_MAX_CONTEXT_CHARS", "45000"))
+        if not isinstance(rag_context, list):
+            return str(rag_context)
+        parts = []
+        total = 0
+        sep = "\n\n---\n\n"
+        for doc in rag_context:
+            pg = doc.get("page", "N/A")
+            text = (doc.get("text") or "").strip()
+            if len(text) > max_per:
+                text = text[:max_per] + "\n[... truncated for model context limit ...]"
+            block = f"Page {pg}:\n{text}"
+            add_len = len(block) + (len(sep) if parts else 0)
+            if total + add_len > max_total:
+                room = max_total - total - (len(sep) if parts else 0) - 80
+                if room > 400:
+                    parts.append(f"Page {pg}:\n{text[:room]}\n[... truncated ...]")
+                break
+            parts.append(block)
+            total += add_len
+        return sep.join(parts)
+
+    @staticmethod
+    def _normalize_answer_dict(parsed: dict, schema: str) -> dict:
+        """Ensure keys exist; recover prose from step_by_step when model leaves final_answer as N/A."""
+        if not isinstance(parsed, dict):
+            return {
+                "final_answer": "N/A",
+                "reasoning_summary": "",
+                "step_by_step_analysis": "",
+                "relevant_pages": [],
+            }
+        out = {
+            "step_by_step_analysis": (parsed.get("step_by_step_analysis") or "").strip(),
+            "reasoning_summary": (parsed.get("reasoning_summary") or "").strip(),
+            "relevant_pages": parsed.get("relevant_pages") or [],
+            "final_answer": parsed.get("final_answer"),
+        }
+        rp = out["relevant_pages"]
+        if isinstance(rp, list):
+            clean = []
+            for x in rp:
+                try:
+                    clean.append(int(x))
+                except (TypeError, ValueError):
+                    pass
+            out["relevant_pages"] = clean
+        else:
+            out["relevant_pages"] = []
+
+        fa = out["final_answer"]
+        if isinstance(fa, dict):
+            fa = json.dumps(fa, ensure_ascii=False)
+            out["final_answer"] = fa
+        elif fa is not None and not isinstance(fa, str) and schema == "number":
+            out["final_answer"] = fa
+        elif fa is not None and not isinstance(fa, str):
+            out["final_answer"] = str(fa)
+
+        fa = out["final_answer"]
+        analysis = out["step_by_step_analysis"]
+        if schema == "explanation" and (fa in (None, "", "N/A")) and len(analysis) > 120:
+            out["final_answer"] = analysis[:4000] + ("..." if len(analysis) > 4000 else "")
+            if not out["reasoning_summary"]:
+                out["reasoning_summary"] = analysis[:300] + ("..." if len(analysis) > 300 else "")
+        elif fa in (None, ""):
+            out["final_answer"] = "N/A"
+
+        return out
 
     def fix_answer_schema(self, response: str, system_prompt: str) -> dict:
         """Fix malformed JSON responses."""
-        fix_prompt = AnswerSchemaFixPrompt.user_prompt.format(
-            system_prompt=system_prompt,
-            response=response
+        fix_prompt = AnswerSchemaFixPrompt.format_user_prompt(
+            system_prompt, response
         )
         try:
             messages = [
@@ -93,8 +161,8 @@ class OpenAIProcessor:
                 messages=messages,
                 temperature=0.3
             )
-            return json.loads(content)
-        except:
+            return parse_json_object_from_llm_text(content)
+        except Exception:
             return {"final_answer": "N/A", "error": "Failed to parse", "step_by_step_analysis": "", "reasoning_summary": ""}
 
 
