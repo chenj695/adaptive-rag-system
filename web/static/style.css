@@ -379,165 +379,33 @@ header {
 }
 
 /* ============================================
-   Dashboard layout (row 1: upload | process | status;
-   row 2: library | query)
+   Main Content Grid
    ============================================ */
 
-.dashboard-row {
+.main-content {
     display: grid;
+    grid-template-columns: 380px 1fr;
     gap: 24px;
-}
-
-.dashboard-row-top {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-top: 20px;
-    align-items: stretch;
-}
-
-.dashboard-row-top .card {
-    margin-bottom: 0;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
-.dashboard-row-top .upload-card .file-list {
-    max-height: 160px;
-    overflow-y: auto;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-.dashboard-row-top .upload-card .btn {
-    margin-top: auto;
-}
-
-.dashboard-row-top .upload-placeholder p {
-    margin-bottom: 0;
-}
-
-.dashboard-row-top .upload-area {
-    margin-bottom: 12px;
-}
-
-/* Process: one horizontal line (1 Parse | 2 Index | 3 Query) */
-.dashboard-row-top .process-card .card-desc {
-    margin-bottom: 10px;
-    font-size: 0.88rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.dashboard-row-top .process-card .btn {
-    margin-top: auto;
-}
-
-.dashboard-row-top .process-steps {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 4px;
-    margin: 10px 0 12px;
-    padding: 8px 8px;
-    min-width: 0;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-.dashboard-row-top .process-steps .step {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    font-size: 0.72rem;
-    flex: 1 1 0;
-    min-width: 0;
-    white-space: nowrap;
-}
-
-.dashboard-row-top .process-steps .step-num {
-    width: 20px;
-    height: 20px;
-    font-size: 0.65rem;
-    flex-shrink: 0;
-}
-
-/* System Status: fill card height, center metrics vertically */
-.dashboard-row-top .stats-card .card-header {
-    margin-bottom: 10px;
-    flex-shrink: 0;
-}
-
-.dashboard-row-top .stats-card .stats-grid {
-    flex: 1 1 auto;
-    align-content: center;
-    min-height: 0;
-    gap: 8px;
-}
-
-.dashboard-row-top .stat {
-    padding: 10px 4px;
-}
-
-.dashboard-row-top .stat-icon {
-    margin-bottom: 2px;
-}
-
-.dashboard-row-top .stat-icon svg {
-    width: 20px;
-    height: 20px;
-}
-
-.dashboard-row-top .stat-value {
-    font-size: 1.45rem;
-    line-height: 1.15;
-}
-
-.dashboard-row-top .stat-label {
-    font-size: 0.68rem;
-    letter-spacing: 0.35px;
-    white-space: nowrap;
-}
-
-.dashboard-row-main {
-    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
-    margin-top: 24px;
-    align-items: start;
-}
-
-.dashboard-col-query {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    min-width: 0;
-}
-
-.dashboard-col-query .card {
-    margin-bottom: 0;
-}
-
-.dashboard-col-library .documents-card {
-    margin-bottom: 0;
-}
-
-.dashboard-col-library .document-list {
-    max-height: min(420px, 55vh);
 }
 
 @media (max-width: 1024px) {
-    .dashboard-row-top {
+    .main-content {
         grid-template-columns: 1fr;
     }
+}
 
-    .dashboard-row-main {
+/* Bottom Row Layout */
+.bottom-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-top: 24px;
+}
+
+@media (max-width: 1024px) {
+    .bottom-row {
         grid-template-columns: 1fr;
-    }
-
-    .dashboard-row-top .upload-card .file-list {
-        max-height: 200px;
     }
 }
 
