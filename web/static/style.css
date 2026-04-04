@@ -391,7 +391,8 @@ header {
 .dashboard-row-top {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-top: 20px;
-    align-items: stretch;
+    /* Natural card heights — avoids a tall empty band in System Status */
+    align-items: start;
 }
 
 .dashboard-row-top .card {
@@ -412,10 +413,64 @@ header {
     margin-top: auto;
 }
 
+/* Single row: 1 — 2 — 3 stay on one line in narrow top-row columns */
 .dashboard-row-top .process-steps {
-    flex-wrap: wrap;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px 8px;
+    margin: 12px 0;
+    padding: 10px 10px;
+    align-items: center;
+}
+
+.dashboard-row-top .process-steps .step {
+    flex-direction: column;
+    align-items: center;
     justify-content: flex-start;
+    gap: 5px;
+    font-size: 0.75rem;
+    min-width: 0;
+    text-align: center;
+    line-height: 1.25;
+}
+
+.dashboard-row-top .process-steps .step-num {
+    width: 22px;
+    height: 22px;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+}
+
+/* Tighter System Status in the top row */
+.dashboard-row-top .stats-card .card-header {
+    margin-bottom: 12px;
+}
+
+.dashboard-row-top .stats-grid {
+    gap: 8px;
+}
+
+.dashboard-row-top .stat {
+    padding: 10px 4px;
+}
+
+.dashboard-row-top .stat-icon {
+    margin-bottom: 2px;
+}
+
+.dashboard-row-top .stat-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.dashboard-row-top .stat-value {
+    font-size: 1.45rem;
+    line-height: 1.15;
+}
+
+.dashboard-row-top .stat-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.35px;
 }
 
 .dashboard-row-main {
