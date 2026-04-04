@@ -10,6 +10,12 @@ from openai import OpenAI
 _log = logging.getLogger(__name__)
 
 
+def _clip_text(text: str, max_chars: int) -> str:
+    if max_chars <= 0 or not text or len(text) <= max_chars:
+        return text or ""
+    return text[:max_chars].rstrip() + "…"
+
+
 def _looks_like_rate_limit(exc: BaseException) -> bool:
     msg = str(exc).lower()
     if "too many requests" in msg or "rate limit" in msg or "429" in msg:
@@ -19,6 +25,16 @@ def _looks_like_rate_limit(exc: BaseException) -> bool:
         return True
     err = getattr(exc, "response", None)
     if err is not None and getattr(err, "status_code", None) == 429:
+        return True
+    return False
+
+
+def _looks_like_payload_too_large(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    if "413" in msg or "tokens_limit" in msg or "too large" in msg or "request body too large" in msg:
+        return True
+    code = getattr(exc, "status_code", None)
+    if code == 413:
         return True
     return False
 
@@ -38,6 +54,10 @@ class LLMReranker:
         self._rerank_max_retries = int(os.getenv("RERANK_MAX_RETRIES", "3"))
         self._rerank_retry_base_sec = float(os.getenv("RERANK_RETRY_BASE_SEC", "2.0"))
         self._rerank_batch_delay_sec = float(os.getenv("RERANK_BATCH_DELAY_SEC", "1.5"))
+        # GitHub Models 等对单次请求有严格 token 上限（如 8000）；只截断发给 rerank 的文本，不影响检索结果里的全文
+        self._rerank_query_max_chars = int(os.getenv("RERANK_QUERY_MAX_CHARS", "512"))
+        self._rerank_passage_max_chars = int(os.getenv("RERANK_PASSAGE_MAX_CHARS", "600"))
+        self._rerank_batch_size = int(os.getenv("RERANK_BATCH_SIZE", "6"))
 
         if not self.enabled:
             _log.warning("LLM reranker disabled: no API token found.")
@@ -64,6 +84,9 @@ class LLMReranker:
         if not texts:
             return []
 
+        q_short = _clip_text(query, self._rerank_query_max_chars)
+        texts_for_api = [_clip_text(t, self._rerank_passage_max_chars) for t in texts]
+
         prompt = {
             "task": "rank_relevance",
             "instruction": (
@@ -71,8 +94,8 @@ class LLMReranker:
                 "{\"scores\": [float,...]} with one score per passage in [0,1], "
                 "higher means more relevant."
             ),
-            "query": query,
-            "passages": [{"id": i, "text": t} for i, t in enumerate(texts)],
+            "query": q_short,
+            "passages": [{"id": i, "text": t} for i, t in enumerate(texts_for_api)],
         }
 
         user_content = json.dumps(prompt, ensure_ascii=False)
@@ -126,6 +149,11 @@ class LLMReranker:
                     )
                     time.sleep(delay)
                     continue
+                if _looks_like_payload_too_large(exc):
+                    _log.warning(
+                        "reranker request too large (reduce RERANK_PASSAGE_MAX_CHARS / RERANK_BATCH_SIZE): %s",
+                        exc,
+                    )
                 _log.warning("reranker API failed, fallback to default rank: %s", exc)
                 return self._default_rank([{"distance": 0.5}] * len(texts))
 
@@ -133,11 +161,15 @@ class LLMReranker:
         self,
         query: str,
         documents: List[Dict],
-        documents_batch_size: int = 32,
+        documents_batch_size: int = 6,
         llm_weight: float = 0.7,
     ) -> List[Dict]:
         if not documents:
             return []
+
+        # 与 GitHub Models 8k token 上限配合：默认用小批次 + 上文截断
+        batch_size = min(documents_batch_size, self._rerank_batch_size)
+        batch_size = max(1, batch_size)
 
         llm_weight = max(0.0, min(1.0, llm_weight))
         vec_weight = 1.0 - llm_weight
@@ -153,10 +185,9 @@ class LLMReranker:
                 out.append({**d, "llm_score": s, "final_score": final_score})
             return out
 
-        # 分批
         batches = [
-            documents[i:i + documents_batch_size]
-            for i in range(0, len(documents), documents_batch_size)
+            documents[i:i + batch_size]
+            for i in range(0, len(documents), batch_size)
         ]
 
         # 串行调用；默认大批次减少请求次数；多批时在批次间暂停降低限流概率
