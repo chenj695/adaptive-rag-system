@@ -84,14 +84,26 @@ class BGEReranker:
         self._model = None
 
     def _device(self) -> str:
-        d = os.getenv("BGE_RERANKER_DEVICE", "").strip()
-        if d:
-            return d
+        requested = os.getenv("BGE_RERANKER_DEVICE", "").strip().lower()
         try:
             import torch
-            return "cuda" if torch.cuda.is_available() else "cpu"
+            cuda_ok = torch.cuda.is_available()
         except ImportError:
-            return "cpu"
+            cuda_ok = False
+
+        if not requested:
+            return "cuda" if cuda_ok else "cpu"
+
+        if requested in ("cuda", "gpu"):
+            if not cuda_ok:
+                _log.warning(
+                    "BGE_RERANKER_DEVICE=%s but no CUDA GPU; using CPU for reranker",
+                    os.getenv("BGE_RERANKER_DEVICE", "").strip() or "cuda",
+                )
+                return "cpu"
+            return "cuda"
+
+        return requested
 
     def _ensure_model(self):
         if self._model is not None:
