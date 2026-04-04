@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 from rank_bm25 import BM25Okapi
 
-from src.reranking import LLMReranker
+from src.reranking import get_reranker
 from src.local_embeddings import get_embedding_model
 
 _log = logging.getLogger(__name__)
@@ -241,7 +241,7 @@ class MultiPathRetriever:
         self.vector_retriever = VectorRetriever(vector_db_dir, documents_dir)
         self.bm25_retriever = BM25Retriever(bm25_dir, documents_dir)
         self.rrf_k = rrf_k
-        self.reranker = LLMReranker()
+        self.reranker = get_reranker()
         
         _log.info(f"MultiPathRetriever initialized with RRF k={rrf_k}")
     

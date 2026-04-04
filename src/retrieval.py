@@ -6,7 +6,7 @@ import faiss
 import numpy as np
 from dotenv import load_dotenv
 
-from src.reranking import LLMReranker
+from src.reranking import get_reranker
 from src.local_embeddings import get_embedding_model
 
 _log = logging.getLogger(__name__)
@@ -197,7 +197,7 @@ class HybridRetriever:
 
     def __init__(self, vector_db_dir: Path, chunked_reports_dir: Path, documents_dir: Path):
         self.vector_retriever = VectorRetriever(vector_db_dir, chunked_reports_dir, documents_dir)
-        self.reranker = LLMReranker()
+        self.reranker = get_reranker()
 
     def get_all_documents(self) -> List[Dict]:
         return self.vector_retriever.get_all_documents()
