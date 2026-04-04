@@ -27,9 +27,8 @@ def create_app():
     (root_path / 'data' / 'databases').mkdir(parents=True, exist_ok=True)
     (app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
-    # 初始化 RAG 流水线
-    # 注意：确保 configs 中存在对应的配置键
-    pipeline = Pipeline(root_path, run_config=configs.get("max_nst_o3m", {}))
+    # 初始化 RAG 流水线（答题走 GitHub Models，需配置 GITHUB_TOKEN）
+    pipeline = Pipeline(root_path, run_config=configs["github"])
 
     def allowed_file(filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
