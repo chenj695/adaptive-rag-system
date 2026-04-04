@@ -65,6 +65,19 @@ max_nst_o3m_config = RunConfig(
     config_suffix="_max_nst_o3m"
 )
 
+# GitHub Models via OpenAI Python SDK (OPENAI_API_KEY + OPENAI_BASE_URL -> models.github.ai)
+max_nst_o3m_github_sdk_config = RunConfig(
+    use_serialized_tables=False,
+    parent_document_retrieval=True,
+    llm_reranking=True,
+    parallel_requests=5,
+    submission_name="RAG System v.5 (GitHub via OpenAI SDK)",
+    pipeline_details="api_provider=openai; OPENAI_BASE_URL=models.github.ai/inference; use GITHUB_MODEL env for answering model id",
+    api_provider="openai",
+    answering_model="openai/gpt-4.1",
+    config_suffix="_max_nst_o3m"
+)
+
 max_st_o3m_config = RunConfig(
     use_serialized_tables=True,
     parent_document_retrieval=True,
@@ -161,6 +174,7 @@ configs = {
     "max": max_config,
     "max_no_ser_tab": max_no_ser_tab_config,
     "max_nst_o3m": max_nst_o3m_config,
+    "max_nst_o3m_github_sdk": max_nst_o3m_github_sdk_config,
     "max_st_o3m": max_st_o3m_config,
     "gemini_thinking": gemini_thinking_config,
     "multi_path": multi_path_config,

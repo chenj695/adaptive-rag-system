@@ -89,7 +89,14 @@ class UnifiedLLMClient:
                 self.model = os.getenv("GITHUB_MODEL", "openai/gpt-4.1")
         else:
             from openai import OpenAI
-            self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            api_key = os.getenv("OPENAI_API_KEY")
+            base = (os.getenv("OPENAI_BASE_URL") or "").strip().rstrip("/")
+            if base.endswith("/chat/completions"):
+                base = base[: -len("/chat/completions")]
+            kw = {"api_key": api_key}
+            if base:
+                kw["base_url"] = base
+            self.client = OpenAI(**kw)
             self.model = model
     
     def get_completion(

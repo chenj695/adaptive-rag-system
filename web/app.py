@@ -1,6 +1,7 @@
 import os
 import sys
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -27,8 +28,12 @@ def create_app():
     (root_path / 'data' / 'databases').mkdir(parents=True, exist_ok=True)
     (app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
 
-    # 初始化 RAG 流水线（答题走 GitHub Models，需配置 GITHUB_TOKEN）
-    pipeline = Pipeline(root_path, run_config=configs["github"])
+    # 方式 B：api_provider=openai + OpenAI SDK，base_url 指向 GitHub Models（.env：OPENAI_API_KEY + OPENAI_BASE_URL）
+    run_cfg = configs["max_nst_o3m_github_sdk"]
+    gh_model = os.getenv("GITHUB_MODEL", "").strip()
+    if gh_model:
+        run_cfg = replace(run_cfg, answering_model=gh_model)
+    pipeline = Pipeline(root_path, run_config=run_cfg)
 
     def allowed_file(filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
