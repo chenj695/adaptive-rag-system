@@ -379,33 +379,81 @@ header {
 }
 
 /* ============================================
-   Main Content Grid
+   Dashboard layout (row 1: upload | process | status;
+   row 2: library | query)
    ============================================ */
 
-.main-content {
+.dashboard-row {
     display: grid;
-    grid-template-columns: 380px 1fr;
     gap: 24px;
+}
+
+.dashboard-row-top {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-top: 20px;
+    align-items: stretch;
+}
+
+.dashboard-row-top .card {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dashboard-row-top .upload-card .file-list {
+    max-height: 160px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.dashboard-row-top .upload-card .btn {
+    margin-top: auto;
+}
+
+.dashboard-row-top .process-steps {
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+.dashboard-row-main {
+    grid-template-columns: minmax(280px, 1fr) minmax(0, 1.15fr);
+    margin-top: 24px;
+    align-items: start;
+}
+
+.dashboard-col-query {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+}
+
+.dashboard-col-query .card {
+    margin-bottom: 0;
+}
+
+.dashboard-col-library .documents-card {
+    margin-bottom: 0;
+}
+
+.dashboard-col-library .document-list {
+    max-height: min(420px, 55vh);
 }
 
 @media (max-width: 1024px) {
-    .main-content {
+    .dashboard-row-top {
         grid-template-columns: 1fr;
     }
-}
 
-/* Bottom Row Layout */
-.bottom-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-    margin-top: 24px;
-}
-
-@media (max-width: 1024px) {
-    .bottom-row {
+    .dashboard-row-main {
         grid-template-columns: 1fr;
+    }
+
+    .dashboard-row-top .upload-card .file-list {
+        max-height: 200px;
     }
 }
 
