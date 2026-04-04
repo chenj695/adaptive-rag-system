@@ -53,8 +53,7 @@
                                 <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
                             </svg>
                         </div>
-                        <p>Drop PDF files here or click to browse</p>
-                        <small>Atmospheric research papers, climate reports, weather data</small>
+                        <p>Drop or browse PDFs</p>
                     </div>
                 </div>
                 <div class="file-list" id="fileList"></div>
@@ -74,11 +73,11 @@
                     <span class="card-icon">🔄</span>
                     <h2>Process Documents</h2>
                 </div>
-                <p class="card-desc">Parse PDFs, extract text, and build vector database</p>
+                <p class="card-desc">PDF → text → vector index</p>
                 <div class="process-steps">
-                    <div class="step"><span class="step-num">1</span> Parse PDFs</div>
-                    <div class="step"><span class="step-num">2</span> Build Index</div>
-                    <div class="step"><span class="step-num">3</span> Ready to Query</div>
+                    <div class="step"><span class="step-num">1</span> Parse</div>
+                    <div class="step"><span class="step-num">2</span> Index</div>
+                    <div class="step"><span class="step-num">3</span> Query</div>
                 </div>
                 <button class="btn btn-secondary" id="processBtn" disabled>
                     <span class="spinner hidden" id="processSpinner"></span>
@@ -110,7 +109,7 @@
                             </svg>
                         </span>
                         <span class="stat-value" id="statPdfs">0</span>
-                        <span class="stat-label">PDF Files</span>
+                        <span class="stat-label">PDFs</span>
                     </div>
                     <div class="stat">
                         <span class="stat-icon">
@@ -131,7 +130,7 @@
                             </svg>
                         </span>
                         <span class="stat-value" id="statVectors">0</span>
-                        <span class="stat-label">Vector DBs</span>
+                        <span class="stat-label">Vectors</span>
                     </div>
                 </div>
             </div>

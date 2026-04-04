@@ -391,8 +391,7 @@ header {
 .dashboard-row-top {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-top: 20px;
-    /* Natural card heights — avoids a tall empty band in System Status */
-    align-items: start;
+    align-items: stretch;
 }
 
 .dashboard-row-top .card {
@@ -413,40 +412,69 @@ header {
     margin-top: auto;
 }
 
-/* Single row: 1 — 2 — 3 stay on one line in narrow top-row columns */
-.dashboard-row-top .process-steps {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px 8px;
-    margin: 12px 0;
-    padding: 10px 10px;
-    align-items: center;
+.dashboard-row-top .upload-placeholder p {
+    margin-bottom: 0;
 }
 
-.dashboard-row-top .process-steps .step {
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 5px;
-    font-size: 0.75rem;
-    min-width: 0;
-    text-align: center;
-    line-height: 1.25;
-}
-
-.dashboard-row-top .process-steps .step-num {
-    width: 22px;
-    height: 22px;
-    font-size: 0.7rem;
-    flex-shrink: 0;
-}
-
-/* Tighter System Status in the top row */
-.dashboard-row-top .stats-card .card-header {
+.dashboard-row-top .upload-area {
     margin-bottom: 12px;
 }
 
-.dashboard-row-top .stats-grid {
+/* Process: one horizontal line (1 Parse | 2 Index | 3 Query) */
+.dashboard-row-top .process-card .card-desc {
+    margin-bottom: 10px;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dashboard-row-top .process-card .btn {
+    margin-top: auto;
+}
+
+.dashboard-row-top .process-steps {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px;
+    margin: 10px 0 12px;
+    padding: 8px 8px;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-row-top .process-steps .step {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.dashboard-row-top .process-steps .step-num {
+    width: 20px;
+    height: 20px;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+}
+
+/* System Status: fill card height, center metrics vertically */
+.dashboard-row-top .stats-card .card-header {
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.dashboard-row-top .stats-card .stats-grid {
+    flex: 1 1 auto;
+    align-content: center;
+    min-height: 0;
     gap: 8px;
 }
 
@@ -471,6 +499,7 @@ header {
 .dashboard-row-top .stat-label {
     font-size: 0.68rem;
     letter-spacing: 0.35px;
+    white-space: nowrap;
 }
 
 .dashboard-row-main {
