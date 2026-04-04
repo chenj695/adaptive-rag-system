@@ -1,13 +1,26 @@
 import json
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
+import time
 from typing import List, Dict
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
 _log = logging.getLogger(__name__)
+
+
+def _looks_like_rate_limit(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    if "too many requests" in msg or "rate limit" in msg or "429" in msg:
+        return True
+    code = getattr(exc, "status_code", None)
+    if code == 429:
+        return True
+    err = getattr(exc, "response", None)
+    if err is not None and getattr(err, "status_code", None) == 429:
+        return True
+    return False
 
 
 class LLMReranker:
@@ -22,6 +35,9 @@ class LLMReranker:
 
         self.model_name = os.getenv("GITHUB_MODEL", "openai/gpt-4.1")
         self.enabled = bool(token)
+        self._rerank_max_retries = int(os.getenv("RERANK_MAX_RETRIES", "3"))
+        self._rerank_retry_base_sec = float(os.getenv("RERANK_RETRY_BASE_SEC", "2.0"))
+        self._rerank_batch_delay_sec = float(os.getenv("RERANK_BATCH_DELAY_SEC", "1.5"))
 
         if not self.enabled:
             _log.warning("LLM reranker disabled: no API token found.")
@@ -59,52 +75,65 @@ class LLMReranker:
             "passages": [{"id": i, "text": t} for i, t in enumerate(texts)],
         }
 
-        try:
-            resp = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": "You are a strict JSON reranker."},
-                    {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-                ],
-                temperature=0,
-                timeout=60,
-            )
+        user_content = json.dumps(prompt, ensure_ascii=False)
+        max_retries = self._rerank_max_retries
+        base_delay = self._rerank_retry_base_sec
 
-            content = (resp.choices[0].message.content or "").strip()
-            # 去除代码块包裹
-            if content.startswith("```"):
-                content = content.strip("`")
-                if content.startswith("json"):
-                    content = content[4:].strip()
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": "You are a strict JSON reranker."},
+                        {"role": "user", "content": user_content},
+                    ],
+                    temperature=0,
+                    timeout=120,
+                )
 
-            data = json.loads(content)
-            scores = data.get("scores", [])
+                content = (resp.choices[0].message.content or "").strip()
+                # 去除代码块包裹
+                if content.startswith("```"):
+                    content = content.strip("`")
+                    if content.startswith("json"):
+                        content = content[4:].strip()
 
-            # 长度纠正
-            if not isinstance(scores, list):
-                return self._default_rank([{"distance": 0.5}] * len(texts))
+                data = json.loads(content)
+                scores = data.get("scores", [])
 
-            fixed = []
-            for i in range(len(texts)):
-                if i < len(scores):
-                    try:
-                        v = float(scores[i])
-                    except Exception:
+                # 长度纠正
+                if not isinstance(scores, list):
+                    return self._default_rank([{"distance": 0.5}] * len(texts))
+
+                fixed = []
+                for i in range(len(texts)):
+                    if i < len(scores):
+                        try:
+                            v = float(scores[i])
+                        except Exception:
+                            v = 0.0
+                    else:
                         v = 0.0
-                else:
-                    v = 0.0
-                fixed.append(max(0.0, min(1.0, v)))
-            return fixed
+                    fixed.append(max(0.0, min(1.0, v)))
+                return fixed
 
-        except Exception as exc:
-            _log.warning("reranker API failed, fallback to default rank: %s", exc)
-            return self._default_rank([{"distance": 0.5}] * len(texts))
+            except Exception as exc:
+                if attempt < max_retries and _looks_like_rate_limit(exc):
+                    delay = base_delay * (2 ** attempt)
+                    _log.warning(
+                        "reranker rate limited, retry in %.1fs (attempt %s/%s): %s",
+                        delay, attempt + 1, max_retries, exc,
+                    )
+                    time.sleep(delay)
+                    continue
+                _log.warning("reranker API failed, fallback to default rank: %s", exc)
+                return self._default_rank([{"distance": 0.5}] * len(texts))
 
     def rerank_documents(
         self,
         query: str,
         documents: List[Dict],
-        documents_batch_size: int = 2,
+        documents_batch_size: int = 32,
         llm_weight: float = 0.7,
     ) -> List[Dict]:
         if not documents:
@@ -130,10 +159,13 @@ class LLMReranker:
             for i in range(0, len(documents), documents_batch_size)
         ]
 
-        results = []
-        with ThreadPoolExecutor(max_workers=min(4, len(batches))) as executor:
-            for batch_res in executor.map(process_batch, batches):
-                results.extend(batch_res)
+        # 串行调用；默认大批次减少请求次数；多批时在批次间暂停降低限流概率
+        results: List[Dict] = []
+        delay = self._rerank_batch_delay_sec
+        for i, batch in enumerate(batches):
+            if i > 0 and delay > 0:
+                time.sleep(delay)
+            results.extend(process_batch(batch))
 
         results.sort(key=lambda x: x.get("final_score", 0.0), reverse=True)
         return results
