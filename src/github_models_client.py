@@ -2,10 +2,47 @@
 import json
 import logging
 import os
-from typing import List, Dict, Any, Optional
+import time
+from typing import List, Dict, Any, Optional, Callable, TypeVar
 import requests
 
 _log = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def _looks_like_rate_limit(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "429" in msg or "too many requests" in msg or "rate limit" in msg
+
+
+def _retry_on_rate_limit(
+    fn: Callable[[], T],
+    max_retries: int,
+    base_delay_sec: float,
+    label: str = "LLM",
+) -> T:
+    last: Optional[BaseException] = None
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            last = e
+            if attempt < max_retries and _looks_like_rate_limit(e):
+                delay = base_delay_sec * (2 ** attempt)
+                _log.warning(
+                    "%s rate limited, sleeping %.1fs (attempt %s/%s): %s",
+                    label,
+                    delay,
+                    attempt + 1,
+                    max_retries,
+                    e,
+                )
+                time.sleep(delay)
+                continue
+            raise
+    assert last is not None
+    raise last
 
 
 def parse_json_object_from_llm_text(content: Optional[str]) -> Dict[str, Any]:
@@ -84,6 +121,7 @@ class UnifiedLLMClient:
         self.api_provider = api_provider.lower()
         self.model = model
         
+        self._openai_base_url = ""
         if self.api_provider in ["github", "github_models"]:
             self.client = GitHubModelsClient()
             # Use provided model or default to GPT-4.1
@@ -96,11 +134,24 @@ class UnifiedLLMClient:
             base = (os.getenv("OPENAI_BASE_URL") or "").strip().rstrip("/")
             if base.endswith("/chat/completions"):
                 base = base[: -len("/chat/completions")]
+            self._openai_base_url = base
             kw = {"api_key": api_key}
             if base:
                 kw["base_url"] = base
             self.client = OpenAI(**kw)
             self.model = model
+
+    def _uses_github_inference_openai_sdk(self) -> bool:
+        return (
+            not isinstance(self.client, GitHubModelsClient)
+            and "models.github.ai" in (self._openai_base_url or "").lower()
+        )
+
+    def _llm_max_retries(self) -> int:
+        return int(os.getenv("LLM_COMPLETION_MAX_RETRIES", "6"))
+
+    def _llm_rate_limit_base_sec(self) -> float:
+        return float(os.getenv("LLM_RATE_LIMIT_BASE_SEC", "5.0"))
     
     def get_completion(
         self,
@@ -121,11 +172,21 @@ class UnifiedLLMClient:
             completion_kwargs["response_format"] = response_format
         
         if isinstance(self.client, GitHubModelsClient):
-            return self.client.get_completion(**completion_kwargs)
+            return _retry_on_rate_limit(
+                lambda: self.client.get_completion(**completion_kwargs),
+                max_retries=self._llm_max_retries(),
+                base_delay_sec=self._llm_rate_limit_base_sec(),
+                label="GitHub Models",
+            )
         else:
-            # OpenAI client
-            response = self.client.chat.completions.create(**completion_kwargs)
-            return response.choices[0].message.content
+            return _retry_on_rate_limit(
+                lambda: self.client.chat.completions.create(**completion_kwargs).choices[
+                    0
+                ].message.content,
+                max_retries=self._llm_max_retries(),
+                base_delay_sec=self._llm_rate_limit_base_sec(),
+                label="OpenAI-compatible chat",
+            )
     
     def parse_structured_output(
         self,
@@ -137,21 +198,32 @@ class UnifiedLLMClient:
         
         if isinstance(self.client, GitHubModelsClient):
             # GitHub Models - use JSON mode (output may still include markdown; parse robustly)
-            content = self.client.get_completion(
-                model=self.model,
+            content = self.get_completion(
                 messages=messages,
                 temperature=temperature,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
             return parse_json_object_from_llm_text(content)
-        else:
-            # 官方 OpenAI：优先 beta.parse；GitHub Models 等兼容端通常不支持 parse
+
+        mr = self._llm_max_retries()
+        bd = self._llm_rate_limit_base_sec()
+        skip_beta = self._uses_github_inference_openai_sdk() or (
+            os.getenv("OPENAI_SKIP_BETA_PARSE", "").strip().lower()
+            in ("1", "true", "yes")
+        )
+
+        if not skip_beta:
             try:
-                completion = self.client.beta.chat.completions.parse(
-                    model=self.model,
-                    messages=messages,
-                    response_format=response_schema,
-                    temperature=temperature,
+                completion = _retry_on_rate_limit(
+                    lambda: self.client.beta.chat.completions.parse(
+                        model=self.model,
+                        messages=messages,
+                        response_format=response_schema,
+                        temperature=temperature,
+                    ),
+                    max_retries=mr,
+                    base_delay_sec=bd,
+                    label="beta.parse",
                 )
                 parsed = completion.choices[0].message.parsed
                 if parsed is None:
@@ -159,27 +231,38 @@ class UnifiedLLMClient:
                 return parsed.model_dump()
             except Exception as exc:
                 _log.warning(
-                    "beta.chat.completions.parse unavailable (%s); using JSON object mode",
+                    "beta.chat.completions.parse failed (%s); using JSON object mode",
                     exc,
                 )
-            try:
-                response = self.client.chat.completions.create(
+
+        try:
+            response = _retry_on_rate_limit(
+                lambda: self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=temperature,
                     response_format={"type": "json_object"},
-                )
-                content = (response.choices[0].message.content or "").strip()
-                return parse_json_object_from_llm_text(content)
-            except Exception as exc2:
-                _log.warning(
-                    "JSON object mode failed (%s); trying plain completion",
-                    exc2,
-                )
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature,
-                )
-                content = (response.choices[0].message.content or "").strip()
-                return parse_json_object_from_llm_text(content)
+                ),
+                max_retries=mr,
+                base_delay_sec=bd,
+                label="chat+json_object",
+            )
+            content = (response.choices[0].message.content or "").strip()
+            return parse_json_object_from_llm_text(content)
+        except Exception as exc2:
+            _log.warning(
+                "JSON object mode failed (%s); trying plain completion",
+                exc2,
+            )
+        response = _retry_on_rate_limit(
+            lambda: self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+            ),
+            max_retries=mr,
+            base_delay_sec=bd,
+            label="chat+plain",
+        )
+        content = (response.choices[0].message.content or "").strip()
+        return parse_json_object_from_llm_text(content)
