@@ -135,6 +135,51 @@ Answer:
     system_prompt_with_schema = build_system_prompt(instruction, example, pydantic_schema)
 
 
+class ExplanationSchemaPrompt:
+    """Open-ended explanation: how / what / why / describe / explain questions."""
+
+    instruction = """
+Your task is to answer the question using clear, accurate prose based only on the provided context.
+Follow these steps:
+1. Identify what the question is asking (definition, mechanism, comparison, cause-effect, etc.).
+2. Read the context and extract only information that directly supports an answer.
+3. Synthesize a coherent explanation; use the document's terminology when it matches the question.
+4. If the context does not contain enough information, say so honestly.
+
+Answer rules:
+- Put the direct, user-facing answer in final_answer as one or more short paragraphs (plain text, not JSON inside the string).
+- Use step_by_step_analysis for structured reasoning (cite pages and quotes where helpful).
+- Do not invent facts beyond the context.
+- If the context is insufficient, set final_answer to "N/A" and explain why in reasoning_summary.
+"""
+    class AnswerSchema(BaseModel):
+        step_by_step_analysis: str = Field(
+            description="Detailed step-by-step analysis with at least 5 steps and at least 150 words."
+        )
+        reasoning_summary: str = Field(description="Concise summary of the reasoning, around 50 words.")
+        relevant_pages: List[int] = Field(description="Page numbers where the most relevant information was found.")
+        final_answer: Union[str, Literal["N/A"]] = Field(
+            description="Complete explanatory answer in prose, or 'N/A' if the context does not support an answer."
+        )
+
+    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(AnswerSchema), flags=re.MULTILINE)
+    example = """
+Example:
+Question: "What are adiabatic temperature changes?"
+Context: "Such temperature changes are called adiabatic changes because no heat is added to, or withdrawn from, the air."
+Answer:
+```
+{
+  "step_by_step_analysis": "1. The question asks for a definition of adiabatic temperature changes.\\n2. The context states that these are temperature changes with no heat exchange with the surroundings.\\n3. The passage names them 'adiabatic changes' explicitly.\\n4. I synthesize this into a short definition for the user.\\n5. No contradictory information appears in the excerpt.",
+  "reasoning_summary": "Adiabatic changes are temperature changes in air without heat added or removed.",
+  "relevant_pages": [61],
+  "final_answer": "Adiabatic temperature changes are changes in air temperature that occur without heat being added to or removed from the air parcel (e.g., from expansion or compression as the air moves)."
+}
+```"""
+    system_prompt = build_system_prompt(instruction, example)
+    system_prompt_with_schema = build_system_prompt(instruction, example, pydantic_schema)
+
+
 class AnswerSchemaFixPrompt:
     system_prompt = """You are a JSON formatter.
 Your task is to format raw LLM response into a valid JSON object.

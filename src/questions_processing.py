@@ -13,7 +13,7 @@ from src.retrieval import HybridRetriever
 from src.multi_path_retrieval import MultiPathRetriever, MultiPathRetrieverWithRAPTOR
 from src.prompts import (
     NumberSchemaPrompt, BooleanSchemaPrompt, NameSchemaPrompt,
-    AnswerSchemaFixPrompt
+    ExplanationSchemaPrompt, AnswerSchemaFixPrompt
 )
 from src.github_models_client import UnifiedLLMClient
 
@@ -35,7 +35,8 @@ class OpenAIProcessor:
             "number": NumberSchemaPrompt(),
             "boolean": BooleanSchemaPrompt(),
             "name": NameSchemaPrompt(),
-            "text": NameSchemaPrompt()  # Default to name schema for general text
+            "explanation": ExplanationSchemaPrompt(),
+            "text": NameSchemaPrompt()  # Short entity-style answers when not matched as explanation
         }
         prompt_obj = schema_prompts.get(schema, NumberSchemaPrompt())
         
@@ -154,8 +155,22 @@ class QuestionsProcessor:
                            'what percentage', 'what is the total', 'what was the total']
         if any(phrase in question_lower for phrase in number_indicators):
             return "number"
-        
-        return "text"  # Default to text
+
+        # Open-ended explanation (after boolean / name / number to avoid mis-routing)
+        if "explain" in question_lower or question_lower.startswith("describe "):
+            return "explanation"
+        if question_lower.startswith("why "):
+            return "explanation"
+        if question_lower.startswith("how "):
+            if not (
+                question_lower.startswith("how much ")
+                or question_lower.startswith("how many ")
+            ):
+                return "explanation"
+        if question_lower.startswith("what "):
+            return "explanation"
+
+        return "text"  # Default: entity-style / short string
 
     def get_answer_for_document(self, sha1_name: str, question: str, 
                                  document_name: str = None) -> dict:
